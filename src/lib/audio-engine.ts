@@ -1,5 +1,6 @@
 import { LIFBrain } from "./brain/core";
 import { FLYWIRE_CORPUS, JANELIA_CORPUS, PENTATONIC } from "./brain/corpus";
+import { DATA_VERSION } from "./neural-sim";
 
 export type Lane = 0 | 1 | 2 | 3; // kept for API compat
 
@@ -107,8 +108,8 @@ class BrainModeController {
     this.loading = true;
     try {
       const [w, j] = await Promise.all([
-        fetch("/data/weights-wire.json").then((r) => r.json()),
-        fetch("/data/weights-janelia.json").then((r) => r.json()),
+        fetch(`/data/weights-wire.json?v=${DATA_VERSION}`).then((r) => r.json()),
+        fetch(`/data/weights-janelia.json?v=${DATA_VERSION}`).then((r) => r.json()),
       ]);
       this.players = {
         wire: new BrainPlayer(w, FLYWIRE_CORPUS, 11),

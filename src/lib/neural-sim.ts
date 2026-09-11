@@ -21,6 +21,8 @@ export const REGION_CX = 1 as Region;
 export const REGION_VNC = 2 as Region;
 
 const REVEAL_SECONDS = 0.8;
+/** bump when regenerating public/data bundles — busts immutable browser cache */
+export const DATA_VERSION = 3;
 
 function gauss(): number {
   let u = 0;
@@ -62,6 +64,12 @@ export class NeuralSim {
   edgeList: Uint32Array | null = null;
   /** total synapse degree per node — thick trunks vs thin branches */
   deg: Uint32Array = new Uint32Array(0);
+  /** modeled inter-neuron synapses — the visible connectome web */
+  synapseList: Uint32Array | null = null;
+  /** per-node hue 0..1 — one distinct color per neuron (FlyWire-map look) */
+  nodeHue: Float32Array = new Float32Array(0);
+  /** bumped every time a dataset swaps in */
+  dataVersion = 0;
   /** per-neuron {start, count} into the node arrays — root node = soma */
   neuronRanges: { start: number; count: number; region: "brain" | "vnc" }[] = [];
 
@@ -162,7 +170,7 @@ export class NeuralSim {
   /** Fetch this fly's real morphologies and swap the atlas out from under the panel. */
   async loadReal(): Promise<boolean> {
     try {
-      const res = await fetch(this.datasetUrl);
+      const res = await fetch(`${this.datasetUrl}?v=${DATA_VERSION}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as RealDataset;
       const n = data.point_count;
@@ -196,21 +204,31 @@ export class NeuralSim {
       }
       this.edgeList = new Uint32Array(undirected);
       this.neuronRanges = [];
+      this.nodeHue = new Float32Array(n);
       {
         let c = 0;
-        for (const neu of data.neurons) {
+        for (let ni = 0; ni < data.neurons.length; ni++) {
+          const neu = data.neurons[ni];
+          // golden-angle hue spread — evenly distributed rainbow, FlyWire style
+          const hue = (ni * 0.61803398875) % 1;
+          for (let k = 0; k < neu.count; k++) this.nodeHue[c + k] = hue;
           this.neuronRanges.push({ start: c, count: neu.count, region: neu.region });
           c += neu.count;
         }
       }
-      // modeled inter-neuron synapses: 6% of brain nodes project downstream
+      // modeled inter-neuron synapses (real FlyWire wiring queued): dense
+      // enough to render as the web that fuses the arbors into one organ
       const brainNodes = pools[REGION_OL].concat(pools[REGION_CX]);
+      const synapses: number[] = [];
       for (let i = 0; i < brainNodes.length; i++) {
-        if (Math.random() < 0.06) {
-          const target = Math.random() < 0.7 ? pools[REGION_VNC] : brainNodes;
-          pairs.push(brainNodes[i], target[(Math.random() * target.length) | 0]);
+        if (Math.random() < 0.22) {
+          const target = Math.random() < 0.6 ? pools[REGION_VNC] : brainNodes;
+          const t = target[(Math.random() * target.length) | 0];
+          pairs.push(brainNodes[i], t);
+          synapses.push(brainNodes[i], t);
         }
       }
+      this.synapseList = new Uint32Array(synapses);
       // VNC local coupling
       for (let i = 0; i < pools[REGION_VNC].length; i += 3) {
         pairs.push(pools[REGION_VNC][i], pools[REGION_VNC][(i + 7) % pools[REGION_VNC].length]);
@@ -226,6 +244,7 @@ export class NeuralSim {
       this.poolIdx = pools;
       this.buildCSR(pairs);
       this.realData = true;
+      this.dataVersion++;
       const archives = Array.from(new Set(data.neurons.map((nn) => nn.archive)));
       this.info = {
         neurons: data.neuron_count,
