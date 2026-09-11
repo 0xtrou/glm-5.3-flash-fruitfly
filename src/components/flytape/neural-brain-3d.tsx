@@ -199,8 +199,6 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
 
     let gravOff = new Float32Array(0);
     let gravVel = new Float32Array(0);
-    const neuropilGeos: THREE.BufferGeometry[] = [];
-    const neuropilObjs: THREE.Object3D[] = [];
     let globeShell: THREE.Mesh | null = null;
     const globeRings: THREE.Object3D[] = [];
 
@@ -396,40 +394,6 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
         lineObj.visible = false;
       }
       lineObj.geometry = lineGeo;
-
-      // neuropil wireframes — each brain AREA gets its own color
-      for (const g of neuropilGeos) g.dispose();
-      neuropilGeos.length = 0;
-      for (const obj of neuropilObjs) {
-        group.remove(obj);
-      }
-      neuropilObjs.length = 0;
-      let npIdx = 0;
-      for (const np of NEUROPHILS) {
-        const seg = 36;
-        const pts1: THREE.Vector3[] = [];
-        for (let i = 0; i <= seg; i++) {
-          const a = (i / seg) * Math.PI * 2;
-          pts1.push(new THREE.Vector3(Math.cos(a) * np.rx, Math.sin(a) * np.ry, 0));
-        }
-        const g1 = new THREE.BufferGeometry().setFromPoints(
-          pts1.map((v) => new THREE.Vector3((np.cx - cx) * S + v.x * S, (cy - np.cy) * S + v.y * S, (np.cz - cz) * S + v.z * S * DEPTH_SCALE))
-        );
-        const hue = (npIdx * 0.618) % 1;
-        const l1 = new THREE.Line(
-          g1,
-          new THREE.LineBasicMaterial({
-            color: new THREE.Color().setHSL(hue, 0.65, 0.55),
-            transparent: true,
-            opacity: 0.3,
-            depthWrite: false,
-          })
-        );
-        npIdx++;
-        neuropilGeos.push(g1);
-        group.add(l1);
-        neuropilObjs.push(l1);
-      }
 
       // somata — root node of each reconstructed neuron, slightly larger
       somaGeo.dispose();
