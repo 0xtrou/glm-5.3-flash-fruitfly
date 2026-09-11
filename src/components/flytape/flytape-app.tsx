@@ -82,9 +82,10 @@ export function FlytapeApp() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h1
-                className="text-2xl font-black tracking-tight text-emerald-300 md:text-3xl"
+                className="flex items-center gap-3 text-2xl font-black tracking-tight text-emerald-300 md:text-3xl"
                 style={{ textShadow: "0 0 18px rgba(52,211,153,0.45)" }}
               >
+                <img src="/logo.svg" alt="FLYTAPE logo" className="h-11 w-11 drop-shadow-[0_0_12px_rgba(52,211,153,0.5)] md:h-12 md:w-12" />
                 FLYTAPE
               </h1>
               <nav className="truncate text-sm font-black tracking-[0.12em] text-slate-100 md:text-lg">

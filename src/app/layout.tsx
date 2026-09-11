@@ -14,9 +14,42 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Connectome Crew — Two Uploaded Flies, One Legendary Set",
+  metadataBase: new URL("https://fruitfly.solo.engineer"),
+  title: {
+    default: "FLYTAPE — Two Trained Fly Brains Generating Live Music",
+    template: "%s · FLYTAPE",
+  },
   description:
-    "Google mapped their brains. The Matrix gave them bodies. Beat Saber hell gave them rhythm. DJ FLYWIRE × MC JANELIA — play the crowd in a Three.js rhythm game.",
+    "DJ FLYWIRE × MC JANELIA: two spiking neural networks built on real Drosophila neuron reconstructions, trained with reward-modulated STDP, generating every note of their live set from their own spikes. 100% brain-generated, zero scripted notes.",
+  keywords: [
+    "fly brain",
+    "fruit fly connectome",
+    "spiking neural network",
+    "neural sonification",
+    "generative music",
+    "R-STDP",
+    "FlyWire",
+    "NeuroMorpho",
+    "three.js",
+    "Web Audio",
+  ],
+  authors: [{ name: "The Connectome Crew" }],
+  openGraph: {
+    type: "website",
+    url: "https://fruitfly.solo.engineer",
+    siteName: "FLYTAPE",
+    title: "FLYTAPE — Two Trained Fly Brains Generating Live Music",
+    description:
+      "Real fly-neuron wiring + reward-modulated STDP = two brains that learned to play. Every note is a spike. Zero scripted notes.",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "FLYTAPE — two trained fly brains playing live" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "FLYTAPE — Two Trained Fly Brains Generating Live Music",
+    description:
+      "Spiking networks on real Drosophila morphology, trained with R-STDP, playing a live set from their own spikes.",
+    images: ["/opengraph-image"],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

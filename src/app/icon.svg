@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101c3a"/>
+      <stop offset="0.55" stop-color="#0a1428"/>
+      <stop offset="1" stop-color="#05080f"/>
+    </linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a2c52"/>
+      <stop offset="1" stop-color="#0a1224"/>
+    </linearGradient>
+    <linearGradient id="bevel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eead4" stop-opacity="0.85"/>
+      <stop offset="0.5" stop-color="#5eead4" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#c084fc" stop-opacity="0.35"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="#34d399" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 3D rounded square: extruded base + top face -->
+  <rect x="18" y="26" width="222" height="222" rx="56" fill="#03060c"/>
+  <rect x="14" y="18" width="222" height="222" rx="56" fill="url(#bg)"/>
+  <rect x="14" y="18" width="222" height="222" rx="56" fill="url(#glow)"/>
+  <rect x="14" y="18" width="222" height="222" rx="56" fill="none" stroke="url(#bevel)" stroke-width="3"/>
+  <rect x="22" y="26" width="206" height="206" rx="48" fill="none" stroke="rgba(148,190,255,0.18)" stroke-width="1.5"/>
+
+  <!-- globe: latitude + meridian arcs -->
+  <g fill="none" stroke-linecap="round">
+    <circle cx="128" cy="118" r="62" stroke="url(#face)" stroke-width="0" />
+    <circle cx="128" cy="118" r="62" stroke="#8fb4ff" stroke-opacity="0.55" stroke-width="4"/>
+    <ellipse cx="128" cy="118" rx="62" ry="24" stroke="#8fb4ff" stroke-opacity="0.35" stroke-width="2.5"/>
+    <ellipse cx="128" cy="118" rx="26" ry="62" stroke="#8fb4ff" stroke-opacity="0.3" stroke-width="2.5"/>
+    <ellipse cx="128" cy="118" rx="47" ry="62" stroke="#8fb4ff" stroke-opacity="0.16" stroke-width="2"/>
+  </g>
+
+  <!-- the two flies: red + violet cells on the globe -->
+  <circle cx="96" cy="104" r="11" fill="#ff5c5c"/>
+  <circle cx="96" cy="104" r="15" fill="#ff5c5c" opacity="0.25"/>
+  <circle cx="164" cy="130" r="11" fill="#c084fc"/>
+  <circle cx="164" cy="130" r="15" fill="#c084fc" opacity="0.25"/>
+  <path d="M96 104 Q128 96 164 130" fill="none" stroke="#dfe6ff" stroke-opacity="0.8" stroke-width="3" stroke-dasharray="1 7" stroke-linecap="round"/>
+
+  <!-- beat bars -->
+  <g fill="#5eead4">
+    <rect x="76" y="188" width="10" height="18" rx="5" opacity="0.75"/>
+    <rect x="96" y="178" width="10" height="28" rx="5"/>
+    <rect x="116" y="170" width="10" height="36" rx="5"/>
+    <rect x="136" y="180" width="10" height="26" rx="5" opacity="0.85"/>
+    <rect x="156" y="188" width="10" height="18" rx="5" opacity="0.6"/>
+  </g>
+
+  <!-- antenna sparkle -->
+  <path d="M128 34 l6 14 -6 -4 -6 4 z" fill="#5eead4" opacity="0.9"/>
+</svg>
