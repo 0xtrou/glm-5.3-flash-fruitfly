@@ -1,0 +1,138 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { useGame, statusFor } from "@/lib/game-store";
+import { audioEngine } from "@/lib/audio-engine";
+import { flywireSim, janeliaSim, bootNeuralSims } from "@/lib/neural-sim";import { NeuralPanel } from "./neural-panel";
+import { FaderPanel } from "./fader-panel";
+
+const DjGame = dynamic(() => import("@/components/game/dj-game"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full min-h-[420px] items-center justify-center bg-[#07070f]">
+      <div className="animate-pulse text-center">
+        <div className="text-5xl">🪰</div>
+        <p className="mt-3 font-mono text-sm font-bold tracking-widest text-emerald-300/50 uppercase">
+          Waking 140,024 neurons…
+        </p>
+      </div>
+    </div>
+  ),
+});
+
+function SimClock() {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setT(audioEngine.simTime), 50);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span className="font-mono text-lg font-bold whitespace-nowrap text-slate-100 tabular-nums md:text-3xl">
+      t = {t.toFixed(2)} s
+    </span>
+  );
+}
+
+function StatusStrip() {
+  const [status, setStatus] = useState({ code: "STANDBY", detail: "", progress: 0 });
+  const [telemetry, setTelemetry] = useState("");
+  useEffect(() => {
+    const id = setInterval(() => {
+      const s = useGame.getState();
+      setStatus(statusFor(s, audioEngine.bar));
+      setTelemetry(
+        `FLYWIRE m${Math.round(flywireSim.motorRate() * 100)}/t${Math.round(flywireSim.thinkRate() * 100)}` +
+          ` — JANELIA m${Math.round(janeliaSim.motorRate() * 100)}/t${Math.round(janeliaSim.thinkRate() * 100)}`
+      );
+    }, 120);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="relative flex items-center justify-between gap-4 border-t border-emerald-400/20 bg-[#071510] px-4 py-3">
+      <span className="text-lg font-black tracking-wide text-emerald-300 md:text-xl">{status.code}</span>
+      <span className="truncate text-sm text-slate-500">{status.detail}</span>
+      <span className="hidden font-mono text-[10px] text-slate-500 lg:inline">{telemetry}</span>
+      <div className="absolute inset-x-0 bottom-0 h-[3px] bg-emerald-950">
+        <div
+          className="h-full bg-emerald-400 transition-[width] duration-200"
+          style={{ width: `${status.progress}%`, boxShadow: "0 0 12px #34d39988" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function FlytapeApp() {
+  useEffect(() => {
+    bootNeuralSims();
+    audioEngine.brains.preload(); // weights in parallel — START stays instant
+  }, []);
+  return (
+    <div className="flex min-h-dvh flex-col bg-[#050a08] text-slate-200 lg:h-dvh lg:min-h-0 lg:overflow-hidden">
+      {/* header */}
+      <header className="shrink-0 px-4 pt-3 pb-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h1
+                className="text-2xl font-black tracking-tight text-emerald-300 md:text-3xl"
+                style={{ textShadow: "0 0 18px rgba(52,211,153,0.45)" }}
+              >
+                FLYTAPE
+              </h1>
+              <nav className="truncate text-sm font-black tracking-[0.12em] text-slate-100 md:text-lg">
+                CONNECTOME <span className="text-slate-600">&gt;</span> FLY{" "}
+                <span className="text-slate-600">&gt;</span> DECKS <span className="text-slate-600">&gt;</span>{" "}
+                <span className="text-emerald-300">BANGER</span>
+              </nav>
+            </div>
+            <p className="mt-0.5 text-[12px] text-slate-500 md:text-[13px]">
+              Neural activity <span className="text-slate-700">|</span> Fader input{" "}
+              <span className="text-slate-700">|</span> Beat deployment
+            </p>
+          </div>
+          <SimClock />
+        </div>
+      </header>
+
+      {/* main grid */}
+      <div className="grid min-h-0 flex-1 gap-2 px-2 pb-1 lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_540px]">
+        {/* main panel — the live set */}
+        <section className="flex min-h-[480px] flex-col overflow-hidden rounded-lg border border-white/10 bg-[#04100b] lg:min-h-0">
+          <header className="flex shrink-0 items-center justify-between border-b border-white/10 bg-[#071510] px-3 py-2">
+            <h2 className="text-[12px] font-black tracking-[0.14em] text-emerald-300">
+              DECKS <span className="text-emerald-300/40">/</span> LIVE RHYTHM DEPLOYMENT
+            </h2>
+            <span className="font-mono text-[10px] text-emerald-300/50">DJ FLYWIRE × MC JANELIA · 128 BPM</span>
+          </header>
+          <div className="relative min-h-0 flex-1">
+            <DjGame />
+          </div>
+          <StatusStrip />
+        </section>
+
+        {/* right column — two independent brains + fader input */}
+        <div className="flex min-h-0 flex-col gap-2 lg:grid lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <NeuralPanel sim={flywireSim} title="DJ FLYWIRE" accent="#ff5c5c" drive="kick" />
+          <NeuralPanel sim={janeliaSim} title="MC JANELIA" accent="#c084fc" drive="treble" />
+          <FaderPanel />
+        </div>
+      </div>
+
+      {/* footer */}
+      <footer className="shrink-0 px-4 pb-2 pt-1">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-[13px] text-slate-500">
+          <span>
+            Fly at the decks <span className="text-slate-700">|</span> 128 BPM live synthesis{" "}
+            <span className="text-slate-700">|</span> Synchronized neural activity
+          </span>
+          <span className="font-mono text-[11px] text-slate-600">
+            ANIMATED CONCEPT | MaleCNS v1.0 (CC BY 4.0) / NeuroMechFly + MuJoCo · The Connectome Crew ·
+            Neuron reconstructions: NeuroMorpho.org (Bock, Williams labs)
+          </span>
+        </div>
+      </footer>
+    </div>
+  );
+}
