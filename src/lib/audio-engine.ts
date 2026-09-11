@@ -139,8 +139,8 @@ class BrainModeController {
         fetch(`/data/weights-janelia.json?v=${DATA_VERSION}`).then((r) => r.json()),
       ]);
       this.players = {
-        wire: new BrainPlayer(w, FLYWIRE_CORPUS, 11, 1.3),
-        janelia: new BrainPlayer(j, JANELIA_CORPUS, 47, 1.0),
+        wire: new BrainPlayer(w, FLYWIRE_CORPUS, 11, 1.8),
+        janelia: new BrainPlayer(j, JANELIA_CORPUS, 47, 1.25),
       };
       this.loaded = true;
     } finally {

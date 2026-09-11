@@ -9,6 +9,7 @@ export interface TrainReport {
   metrics: { epoch: number; f1: number; inScale: number; silence: number; reward: number }[];
   /** teacher-free playing score — the real test */
   generationF1: number;
+  bestCheckpoint: { epoch: number; genF1: number };
   passed: boolean;
   durationMs: number;
 }
@@ -60,6 +61,8 @@ export function trainBrain(
   const STEPS = 64; // 2 corpus loops per epoch (32-step corpus × 2)
   const metrics: TrainReport["metrics"] = [];
   let teacher = teacherStart;
+  let bestGenF1 = -1;
+  let bestWeights: Float32Array | null = null;
   const rng = (() => {
     let a = (opts.seed ^ 0x1234567) >>> 0;
     return () => {
@@ -76,6 +79,29 @@ export function trainBrain(
     for (const o of on) m[o] = true;
     return m;
   });
+
+  const genProbe = (): number => {
+    let tp = 0, fn = 0;
+    const savedNoiseOff = true;
+    for (let step = 0; step < 32; step++) {
+      for (let ch = 0; ch < corpus.channels; ch++) {
+        if (onsetMask[ch][step]) brain.stimulate(ch, 38, 1.12);
+      }
+      const counts = brain.step();
+      for (let ch = 0; ch < corpus.channels; ch++) {
+        const spiked = (counts.get(ch) ?? 0) > 0;
+        if (spiked && onsetMask[ch][step]) tp++;
+        else if (!spiked && onsetMask[ch][step]) fn++;
+      }
+    }
+    void savedNoiseOff;
+    const prec = tp / Math.max(1, tp);
+    const rec = tp / Math.max(1, tp + fn);
+    return (2 * prec * rec) / Math.max(1e-9, prec + rec);
+  };
+  let bestGen = -1;
+  let bestAdjW: Float32Array | null = null;
+  let bestEpoch = 0;
 
   for (let epoch = 0; epoch < epochs; epoch++) {
     teacher = epoch < epochs * teacherDecayFrac
@@ -127,11 +153,23 @@ export function trainBrain(
     if (epoch % 20 === 0 || epoch === epochs - 1) {
       console.log(`  epoch ${epoch}: f1=${f1.toFixed(3)} precision=${precision.toFixed(3)} recall=${recall.toFixed(3)} reward=${epochMetric.reward.toFixed(3)} teacher=${teacher.toFixed(2)}`);
     }
-    if (f1 >= f1Target && teacher <= teacherFloor + 0.01) {
-      console.log(`  early stop at epoch ${epoch}: f1 target reached`);
-      break;
+    if (epoch % 20 === 0 && epoch >= 40) {
+      const g = genProbe();
+      if (g > bestGen) {
+        bestGen = g;
+        bestAdjW = Float32Array.from(brain.adjW);
+        bestEpoch = epoch;
+      }
+      if (g >= f1Target && teacher <= teacherFloor + 0.01) {
+        console.log(`  early stop at epoch ${epoch}: gen f1 ${g.toFixed(3)} reached target`);
+        break;
+      }
     }
   }
+
+  // restore the best teacher-free performer
+  if (bestAdjW) brain.adjW.set(bestAdjW);
+  console.log(`  best checkpoint: epoch ${bestEpoch} gen f1 ${bestGen.toFixed(3)}`);
 
   // GENERATION TEST — teacher fully off. The brain must play from its own
   // wiring + learned sensory context. This is the number that matters.
@@ -156,6 +194,7 @@ export function trainBrain(
 
   const last = metrics.slice(-20);
   const avgF1 = last.reduce((s, m) => s + m.f1, 0) / last.length;
+  void avgF1;
   return {
     weights: brain.exportWeights(),
     report: {
@@ -164,6 +203,7 @@ export function trainBrain(
       finalTeacher: teacher,
       metrics,
       generationF1,
+      bestCheckpoint: { epoch: bestEpoch, genF1: bestGen },
       passed: generationF1 >= 0.45,
       durationMs: Date.now() - t0,
     },

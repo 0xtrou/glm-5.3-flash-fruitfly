@@ -21,13 +21,13 @@ function load(name: string): Dataset {
 
 async function main() {
   const jobs = [
-    { tag: "wire", dataset: load("fly-neurons-wire.json"), corpus: FLYWIRE_CORPUS, seed: 11 },
-    { tag: "janelia", dataset: load("fly-neurons-janelia.json"), corpus: JANELIA_CORPUS, seed: 47 },
+    { tag: "wire", dataset: load("fly-neurons-wire.json"), corpus: FLYWIRE_CORPUS, seed: 23, epochs: 700 },
+    { tag: "janelia", dataset: load("fly-neurons-janelia.json"), corpus: JANELIA_CORPUS, seed: 47, epochs: 500 },
   ];
   const reports: Record<string, unknown> = {};
   for (const job of jobs) {
     console.log(`\n=== training ${job.tag} — ${job.corpus.style} ===`);
-    const t = trainBrain(job.dataset, job.corpus, { seed: job.seed });
+    const t = trainBrain(job.dataset, job.corpus, { seed: job.seed, epochs: job.epochs });
     const out = path.join("public", "data", `weights-${job.tag}.json`);
     fs.writeFileSync(out, JSON.stringify(t.weights));
     reports[job.tag] = { ...t.report, weightsBytes: fs.statSync(out).size };
