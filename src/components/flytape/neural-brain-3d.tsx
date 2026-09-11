@@ -199,8 +199,6 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
 
     let gravOff = new Float32Array(0);
     let gravVel = new Float32Array(0);
-    let globeShell: THREE.Mesh | null = null;
-    const globeRings: THREE.Object3D[] = [];
 
     // cosmic backdrop: starfield outside the globe
     {
@@ -419,30 +417,6 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       somaObj.geometry = somaGeo;
 
       radius = 0.5 * Math.hypot(ex1 - ex0, ey1 - ey0, ez1 - ez0) || 1;
-      // globe shell: translucent atmosphere + meridian rings, scaled to the brain
-      if (!globeShell) {
-        globeShell = new THREE.Mesh(
-          new THREE.SphereGeometry(1, 48, 32),
-          new THREE.MeshBasicMaterial({ color: 0x1a3a6e, transparent: true, opacity: 0.05, side: THREE.BackSide, depthWrite: false })
-        );
-        const ringPts: THREE.Vector3[] = [];
-        for (let i = 0; i <= 96; i++) {
-          const a = (i / 96) * Math.PI * 2;
-          ringPts.push(new THREE.Vector3(Math.cos(a), Math.sin(a), 0));
-        }
-        const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
-        for (let i = 0; i < 3; i++) {
-          const ring = new THREE.Line(ringGeo, new THREE.LineBasicMaterial({ color: 0x4a6ab8, transparent: true, opacity: 0.1, depthWrite: false }));
-          ring.rotation.x = (i * Math.PI) / 3;
-          globeRings.push(ring);
-          scene.add(ring);
-        }
-        globeShell.frustumCulled = false;
-        scene.add(globeShell);
-      }
-      const gr = radius * 1.45;
-      globeShell.scale.setScalar(gr);
-      for (const ring of globeRings) ring.scale.setScalar(gr);
       fitCamera();
     };
 

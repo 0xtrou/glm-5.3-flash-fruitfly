@@ -93,12 +93,12 @@ class BrainPlayer {
   step(cStep: number): { counts: Map<number, number>; motorSpikes: number; centralSpikes: number } {
     for (let ch = 0; ch < this.corpus.channels; ch++) {
       const on = this.corpus.onsets[ch].includes(cStep);
-      if (on && this.rand() < 0.88) {
+      if (on && this.rand() < 0.94) {
         const extra = this.rand() < 0.1 ? 14 : 0;
-        this.brain.stimulate(ch, 22 + ((this.rand() * 10) | 0) + extra, 0.95 + this.rand() * 0.1);
-      } else if (!on && this.rand() < 0.045) {
+        this.brain.stimulate(ch, 38 + ((this.rand() * 12) | 0) + extra, 1.12 + this.rand() * 0.1);
+      } else if (!on && this.rand() < 0.05) {
         // spontaneous off-grid thought
-        this.brain.stimulate(ch, 8 + ((this.rand() * 8) | 0), 0.75);
+        this.brain.stimulate(ch, 12 + ((this.rand() * 10) | 0), 0.85);
       }
     }
     return this.brain.stepDetailed();
