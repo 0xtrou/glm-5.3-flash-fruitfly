@@ -196,3 +196,80 @@ export const JANELIA_TRACK_F: Corpus = {
     [0, 3, 7, 12, 10, 7, 3, 0, 10, 3, 7, 12, 10, 7],
   ],
 };
+
+// ---- the IDM records — classical themes cut into glitched breaks ----
+
+/** Beethoven's Symphony No. 5 fate motif over glitched breaks */
+export const FLYWIRE_TRACK_F: Corpus = {
+  style: "beethoven 5 (idm)",
+  channels: 4,
+  onsets: [
+    [0, 3, 6, 8, 11, 14, 16, 19, 22, 24, 27, 30], // irregular kick clusters
+    [4, 12, 20, 28, 6, 14, 22, 30], // backbeat + ghost snare
+    [0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20, 21, 24, 25, 28, 29], // stutter hats
+    [0, 2, 4, 8, 12, 14, 16, 20, 24, 26, 28], // da-da-da-DUM
+  ],
+  pitches: [
+    undefined,
+    undefined,
+    undefined,
+    [0, 0, 0, 8, 5, 5, 5, 3, 0, 0, 8],
+  ],
+  scale: CHROMATIC,
+};
+
+/** Beethoven, Ode to Joy (1824) — the theme over glitch breaks */
+export const JANELIA_TRACK_G: Corpus = {
+  style: "ode to idm (beethoven)",
+  channels: 4,
+  onsets: [
+    [0, 8, 16, 24],
+    [],
+    [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31], // ticking frame
+    [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30], // the theme
+  ],
+  pitches: [
+    undefined,
+    undefined,
+    undefined,
+    [7, 7, 9, 11, 11, 9, 7, 5, 3, 3, 5, 7, 7, 5, 5, 5],
+  ],
+  scale: CHROMATIC,
+};
+
+/** Für Elise theme, stuttered and cut */
+export const JANELIA_TRACK_H: Corpus = {
+  style: "für elise (idm cut)",
+  channels: 4,
+  onsets: [
+    [0, 16],
+    [12, 28],
+    [5, 9, 13, 15, 21, 25, 27, 31], // off-grid ghosts
+    [0, 1, 2, 3, 4, 6, 7, 8, 10, 12, 13, 14, 16, 18, 20, 22, 24, 26, 28, 30],
+  ],
+  pitches: [
+    undefined,
+    undefined,
+    undefined,
+    [7, 6, 7, 6, 7, 2, 7, 5, 3, 0, 3, 0, 7, 0, 2, 7, 11, 2, 3, 7],
+  ],
+  scale: CHROMATIC,
+};
+
+/** the original ballad, glitched */
+export const JANELIA_TRACK_I: Corpus = {
+  style: "river of lights (idm)",
+  channels: 4,
+  onsets: [
+    [0, 7, 16, 23],
+    [10, 26],
+    [3, 9, 13, 19, 25, 29, 31],
+    [0, 1, 3, 4, 7, 9, 10, 12, 15, 16, 17, 19, 20, 23, 25, 26, 28, 31],
+  ],
+  pitches: [
+    undefined,
+    undefined,
+    undefined,
+    [0, 3, 7, 12, 10, 7, 3, 0, 10, 3, 7, 12, 10, 7, 3, 0, 3, 7],
+  ],
+};

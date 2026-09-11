@@ -5,12 +5,15 @@ import {
   FLYWIRE_TRACK_C,
   FLYWIRE_TRACK_D,
   FLYWIRE_TRACK_E,
+  FLYWIRE_TRACK_F,
   JANELIA_CORPUS,
   JANELIA_TRACK_B,
   JANELIA_TRACK_C,
   JANELIA_TRACK_D,
   JANELIA_TRACK_E,
-  JANELIA_TRACK_F,
+  JANELIA_TRACK_G,
+  JANELIA_TRACK_H,
+  JANELIA_TRACK_I,
   PENTATONIC,
 } from "./brain/corpus";
 import { DATA_VERSION, flywireSim, janeliaSim } from "./neural-sim";
@@ -190,8 +193,8 @@ class BrainModeController {
         fetch(`/data/weights-janelia.json?v=${DATA_VERSION}`).then((r) => r.json()),
       ]);
       this.players = {
-        wire: new BrainPlayer(w, [FLYWIRE_CORPUS, FLYWIRE_TRACK_B, FLYWIRE_TRACK_C, FLYWIRE_TRACK_D, FLYWIRE_TRACK_E], 11, 2.6, (w as { ambient?: number }).ambient ?? 900),
-        janelia: new BrainPlayer(j, [JANELIA_CORPUS, JANELIA_TRACK_B, JANELIA_TRACK_C, JANELIA_TRACK_D, JANELIA_TRACK_E, JANELIA_TRACK_F], 47, 1.5, (j as { ambient?: number }).ambient ?? 900),
+        wire: new BrainPlayer(w, [FLYWIRE_CORPUS, FLYWIRE_TRACK_F, FLYWIRE_TRACK_D, FLYWIRE_TRACK_B, FLYWIRE_TRACK_E, FLYWIRE_TRACK_C], 11, 2.6, (w as { ambient?: number }).ambient ?? 900),
+        janelia: new BrainPlayer(j, [JANELIA_CORPUS, JANELIA_TRACK_G, JANELIA_TRACK_H, JANELIA_TRACK_I, JANELIA_TRACK_D, JANELIA_TRACK_E, JANELIA_TRACK_B, JANELIA_TRACK_C], 47, 1.5, (j as { ambient?: number }).ambient ?? 900),
       };
       this.loaded = true;
     } finally {
