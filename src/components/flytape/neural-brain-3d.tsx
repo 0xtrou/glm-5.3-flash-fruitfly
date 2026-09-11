@@ -10,7 +10,8 @@
  * Scene graph (built once per dataset, keyed on sim.dataVersion + sim.count):
  *   · Points        — every cable node, custom shader: dim silver-blue structure,
  *                     firing nodes bloom cyan→mint→amber→white with sim.act
- *   · LineSegments  — real parent→child cable edges, silver-blue @ low opacity
+ *   · LineSegments  — real parent→child cable edges (= real synapses), per-edge
+ *                     glow when spikes traverse them, smoothed
  *   · Points        — somata (root node of each reconstructed neuron), larger
  *   · Points        — traveling pulses riding pulseTarget() hops (additive)
  * Post: none — solid colors, no bloom/glow. Cells, cables, vibration via color.
@@ -234,7 +235,7 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
       fragmentShader: PULSE_FRAG,
     });
     const lineMat = new THREE.LineBasicMaterial({
-      color: 0x6f8fd0,
+      vertexColors: true,
       transparent: true,
       opacity: 0.5,
       depthWrite: false,
@@ -243,6 +244,10 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
     let nodeGeo = new THREE.BufferGeometry();
     let somaGeo = new THREE.BufferGeometry();
     let lineGeo = new THREE.BufferGeometry();
+    // smoothed glow state — attack/release so spikes bloom and fade softly
+    let nodeGlowArr = new Float32Array(0);
+    let edgeGlowArr = new Float32Array(0);
+    let edgeColorAttr: THREE.BufferAttribute | null = null;
     const pulsePos = new Float32Array(MAX_PULSES * 3);
     const pulseAlpha = new Float32Array(MAX_PULSES);
     const pulseGeo = new THREE.BufferGeometry();
@@ -344,6 +349,7 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
       }
       nodePositions = positions;
       nodeCount = n;
+      nodeGlowArr = new Float32Array(n);
       gravOff = new Float32Array(n * 3);
       gravVel = new Float32Array(n * 3);
 
@@ -373,6 +379,15 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
         }
         lineGeo = new THREE.BufferGeometry();
         lineGeo.setAttribute("position", new THREE.BufferAttribute(lp, 3));
+        edgeGlowArr = new Float32Array(edges.length / 2);
+        const lc = new Float32Array(edges.length * 3);
+        for (let v = 0; v < edges.length; v++) {
+          lc[v * 3] = 0.44;
+          lc[v * 3 + 1] = 0.56;
+          lc[v * 3 + 2] = 0.82;
+        }
+        edgeColorAttr = new THREE.BufferAttribute(lc, 3);
+        lineGeo.setAttribute("color", edgeColorAttr);
         lineObj.visible = true;
       } else {
         lineGeo = new THREE.BufferGeometry(); // procedural atlas — points only
@@ -471,15 +486,23 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
       (pulseGeo.getAttribute("aAlpha") as THREE.BufferAttribute).needsUpdate = true;
     };
 
-    // ---- dynamic pass: sim.act + TRAINED brain firings -> aAct, soma glow ----
+    // ---- dynamic pass: sim.act + TRAINED brain firings -> aAct, edge colors ----
     // The panel's %util reads the trained network's real node firings — the
-    // animation must show the same thing. Node indices match 1:1 (both walk
-    // the morphology bundle in order). Two visual components per node:
+    // animation must show the same thing, on nodes AND connections. Node
+    // indices match the mesh 1:1 (both walk the morphology bundle in order);
+    // every drawn cable edge is a real two-way synapse in the trained graph,
+    // so an edge lights when a spike traversed either endpoint. All glow is
+    // smoothed (fast attack, slow release, frame-rate independent).
     //   fresh spike (≤24 substeps)  → bright bloom, the rhythm you can see
     //   fired this util window (≤512) → sustained lift, the %util you can count
     const FRESH = 24; // substeps of bright bloom after a spike (~375ms @ 96 BPM)
     const UTIL_WINDOW = 512; // same window the %util metric counts
     const UTIL_LIFT = 0.3; // sustained brightness of a recently-fired node
+    const smooth = (cur: number, target: number, dt: number) => {
+      // fast attack, gentle release — exponential, frame-rate independent
+      const rate = target > cur ? 14 : 4.5;
+      return cur + (target - cur) * (1 - Math.exp(-dt * rate));
+    };
     const updateDynamic = (dt: number) => {
       const shown = sim.revealedCount();
       const act = sim.act;
@@ -488,20 +511,55 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
       const brain = audioEngine.brains.brainOf(flyRef.current);
       const lastFire = brain?.lastFire;
       const tSub = brain?.clock ?? 0;
+      const edges = sim.edgeList;
       let hot = 0;
       for (let i = 0; i < nodeCount; i++) {
         let v = i < shown ? act[i] : -1;
+        let bloom = 0;
         if (lastFire && i < nodeCount) {
           const since = tSub - lastFire[i];
           if (since >= 0 && since < UTIL_WINDOW) {
-            const bloom = since < FRESH ? (1 - since / FRESH) * 1.3 : 0;
+            bloom = since < FRESH ? (1 - since / FRESH) * 1.3 : 0;
             v = Math.max(v, bloom, UTIL_LIFT);
           }
         }
-        arr[i] = v;
-        if (v > 0.15) hot++;
+        if (v < 0) {
+          arr[i] = -1; // not yet revealed
+          continue;
+        }
+        const g = smooth(nodeGlowArr[i], v, dt);
+        nodeGlowArr[i] = g;
+        arr[i] = g;
+        if (g > 0.15) hot++;
       }
       actAttr.needsUpdate = true;
+
+      // ---- connections: edges carry the same real firings ----
+      if (edgeColorAttr && edges && edgeGlowArr.length === edges.length / 2) {
+        const lc = edgeColorAttr.array as Float32Array;
+        for (let e = 0, k = 0; e < edgeGlowArr.length; e++, k += 2) {
+          const a = edges[k];
+          const b = edges[k + 1];
+          let target = 0;
+          if (lastFire) {
+            const sa = tSub - lastFire[a];
+            const sb = tSub - lastFire[b];
+            if (sa >= 0 && sa < FRESH) target = (1 - sa / FRESH) * 1.1;
+            if (sb >= 0 && sb < FRESH) target = Math.max(target, (1 - sb / FRESH) * 1.1);
+          }
+          const g = smooth(edgeGlowArr[e], target, dt);
+          edgeGlowArr[e] = g;
+          // base silver-blue, lifted toward fire-white as signals traverse
+          const w = Math.min(1, g);
+          const r = 0.44 + (1.0 - 0.44) * w;
+          const gg = 0.56 + (1.0 - 0.56) * w;
+          const bl = 0.82 + (0.9 - 0.82) * w;
+          const v0 = e * 6;
+          lc[v0] = r; lc[v0 + 1] = gg; lc[v0 + 2] = bl;
+          lc[v0 + 3] = r; lc[v0 + 4] = gg; lc[v0 + 5] = bl;
+        }
+        edgeColorAttr.needsUpdate = true;
+      }
       // cables breathe with population firing
       lineMat.opacity = 0.24 + 0.1 * Math.min(1, hot / 800);
 
@@ -512,7 +570,7 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
         const stride = Math.max(1, Math.floor(meta.count / 6));
         let sum = 0;
         let c = 0;
-        for (let k = 0; k < meta.count && c < 6; k += stride, c++) sum += act[meta.start + k];
+        for (let k = 0; k < meta.count && c < 6; k += stride, c++) sum += nodeGlowArr[meta.start + k];
         sArr[s] = c > 0 ? sum / c : 0;
       }
       somaAttr.needsUpdate = true;
