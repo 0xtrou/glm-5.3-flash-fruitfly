@@ -22,7 +22,7 @@ export const REGION_VNC = 2 as Region;
 
 const REVEAL_SECONDS = 0.8;
 /** bump when regenerating public/data bundles — busts immutable browser cache */
-export const DATA_VERSION = 5;
+export const DATA_VERSION = 6;
 
 function gauss(): number {
   let u = 0;
@@ -55,6 +55,14 @@ export class NeuralSim {
 
   private motorRateEma = 0;
   private thinkRateEma = 0;
+  /** activity audit trail — most recent 400 events */
+  audit: string[] = [];
+
+  auditEvent(msg: string) {
+    const t = (performance.now() / 1000).toFixed(1);
+    this.audit.push(`[${t}s] ${msg}`);
+    if (this.audit.length > 400) this.audit.shift();
+  }
 
   private adjacency: Uint32Array = new Uint32Array(0); // CSR targets
   private offsets: Uint32Array = new Uint32Array(0); // CSR offsets
@@ -245,6 +253,7 @@ export class NeuralSim {
       this.buildCSR(pairs);
       this.realData = true;
       this.dataVersion++;
+      this.auditEvent(`dataset loaded — ${data.neuron_count} real neurons, ${data.point_count} nodes`);
       const archives = Array.from(new Set(data.neurons.map((nn) => nn.archive)));
       this.info = {
         neurons: data.neuron_count,
@@ -318,6 +327,7 @@ export class NeuralSim {
   }
 
   inject(region: Region, energy: number, count = 260) {
+    this.auditEvent(`sensory stimulus → region ${region} (${count} nodes, e=${energy.toFixed(2)})`);
     const pool = this.poolIdx[region];
     if (!pool.length) return;
     const limit = Math.max(1, Math.floor(pool.length * Math.min(1, this.loadProgress)));

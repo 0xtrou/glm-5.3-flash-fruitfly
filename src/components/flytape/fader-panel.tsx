@@ -80,9 +80,28 @@ export function FaderPanel() {
         </div>
       </div>
 
-      <footer className="flex items-center justify-between border-t border-white/10 bg-[#071510] px-3 py-2">
+      <footer className="flex items-center justify-between gap-2 border-t border-white/10 bg-[#071510] px-3 py-2">
         <span className="text-[13px] font-black tracking-wide text-emerald-300">{state}</span>
-        <span className="text-[12px] text-slate-500">{detail}</span>
+        <button
+          onClick={() => {
+            const payload = {
+              exportedAt: new Date().toISOString(),
+              flywire: flywireSim.audit,
+              janelia: janeliaSim.audit,
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "flytape-audit.json";
+            a.click();
+            URL.revokeObjectURL(a.href);
+          }}
+          className="rounded border border-white/15 px-2 py-0.5 font-mono text-[10px] text-white/60 transition hover:border-white/40 hover:text-white"
+          aria-label="Export brain activity audit log"
+        >
+          ⬇ audit log
+        </button>
+        <span className="hidden text-[12px] text-slate-500 sm:inline">{detail}</span>
       </footer>
     </section>
   );

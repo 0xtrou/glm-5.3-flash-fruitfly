@@ -1,6 +1,6 @@
 import { LIFBrain } from "./brain/core";
 import { FLYWIRE_CORPUS, JANELIA_CORPUS, PENTATONIC } from "./brain/corpus";
-import { DATA_VERSION } from "./neural-sim";
+import { DATA_VERSION, flywireSim, janeliaSim } from "./neural-sim";
 
 export type Lane = 0 | 1 | 2 | 3; // kept for API compat
 
@@ -110,6 +110,7 @@ class BrainModeController {
   loading = false;
   /** spikes this bar per brain — synchrony between them triggers drops */
   private barSpikes = { wire: 0, janelia: 0 };
+  private lastBarCounts = { wire: 0, janelia: 0 };
   private lastSync = 0;
   private drive: Record<"wire" | "janelia", { motor: number; think: number }> = {
     wire: { motor: 0, think: 0 },
@@ -205,6 +206,10 @@ class BrainModeController {
     return this.drive[fly];
   }
 
+  lastBarSpikeCounts() {
+    return this.lastBarCounts;
+  }
+
   /**
    * Motor synchrony 0..1 between the two brains — the biological drop trigger.
    * Called at bar boundaries; resets the per-bar counters.
@@ -212,6 +217,7 @@ class BrainModeController {
   synchrony(): number {
     const a = this.barSpikes.wire;
     const b = this.barSpikes.janelia;
+    this.lastBarCounts = { wire: a, janelia: b };
     this.barSpikes.wire = 0;
     this.barSpikes.janelia = 0;
     const now = performance.now();
@@ -381,13 +387,22 @@ class AudioEngine {
       this.visualEvents.push({ time: t, type: "bar" });
       // brains decide the drop: synchrony between both motor populations
       if (bar >= 4 && !this.pendingDrop && this.brains.ready) {
+        const counts = this.brains.lastBarSpikeCounts();
         const sync = this.brains.synchrony();
+        const note = `bar ${bar}: ${counts.wire}+${counts.janelia} motor spikes, sync ${sync.toFixed(2)}`;
         if (sync > 0.55 && bar - this.lastDropBar >= 8) {
           this.pendingDrop = true;
           this.lastDropBar = bar;
+          flywireSim.auditEvent(`${note} → DROP`);
+          janeliaSim.auditEvent(`${note} → DROP`);
+        } else {
+          flywireSim.auditEvent(`${note} — no drop`);
+          janeliaSim.auditEvent(`${note} — no drop`);
         }
       } else if (this.brains.ready) {
-        this.brains.synchrony(); // consume + reset counters anyway
+        const counts = this.brains.lastBarSpikeCounts();
+        flywireSim.auditEvent(`bar ${bar}: ${counts.wire} motor spikes (build/roll)`);
+        janeliaSim.auditEvent(`bar ${bar}: ${counts.janelia} motor spikes (build/roll)`);
       }
     }
     if (this.lastDropBar >= 0 && bar >= this.lastDropBar + 8 && s === 0) {

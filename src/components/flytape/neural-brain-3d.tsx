@@ -140,9 +140,10 @@ void main() {
   float disk = smoothstep(0.5, 0.10, d);
   if (disk < 0.01) discard;
   vec3 hue = hue2rgb(vHue);
-  float glow = smoothstep(0.05, 1.0, max(vAct, 0.0));
-  vec3 col = mix(hue * 0.45 + 0.42, vec3(1.00, 0.97, 0.88), glow * 0.85);
-  gl_FragColor = vec4(col * disk * (0.7 + glow * 0.6), disk);
+  float glow = smoothstep(0.08, 0.9, max(vAct, 0.0));
+  // quiet soma: dim tinted cell; firing soma: bright, white-cored
+  vec3 col = mix(hue * 0.5 + 0.06, vec3(1.0, 0.98, 0.9), glow);
+  gl_FragColor = vec4(col * disk * (0.3 + glow * 0.85), disk);
 }
 `;
 
