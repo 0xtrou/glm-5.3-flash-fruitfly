@@ -73,10 +73,33 @@ class BrainPlayer {
     this.brain.motorGroups = weights.motorGroups;
   }
 
-  /** One musical 16th: sensory context (the environment it grew up in) in, spikes out. */
+  private improvSeed = 7;
+
+  private rand(): number {
+    // xorshift — varies per call, gives each pass through the corpus a life of its own
+    let a = (this.improvSeed = (this.improvSeed + 0x9e3779b9) | 0);
+    a = Math.imul(a ^ (a >>> 16), 0x45d9f3b);
+    a = Math.imul(a ^ (a >>> 16), 0x45d9f3b);
+    return ((a ^ (a >>> 16)) >>> 0) / 4294967296;
+  }
+
+  /**
+   * One musical 16th. Sensory context = learned corpus + live variation:
+   * onsets fire with ~88% probability, 10% gain an extra spur, and every
+   * ~16 steps a random channel gets a spontaneous stimulus. The brain's
+   * learned wiring turns that stream into its own evolving beat — never
+   * the same loop twice.
+   */
   step(cStep: number): { counts: Map<number, number>; motorSpikes: number; centralSpikes: number } {
     for (let ch = 0; ch < this.corpus.channels; ch++) {
-      if (this.corpus.onsets[ch].includes(cStep)) this.brain.stimulate(ch, 40, 1.15);
+      const on = this.corpus.onsets[ch].includes(cStep);
+      if (on && this.rand() < 0.88) {
+        const extra = this.rand() < 0.1 ? 14 : 0;
+        this.brain.stimulate(ch, 34 + ((this.rand() * 12) | 0) + extra, 1.1 + this.rand() * 0.12);
+      } else if (!on && this.rand() < 0.045) {
+        // spontaneous off-grid thought
+        this.brain.stimulate(ch, 10 + ((this.rand() * 10) | 0), 0.9);
+      }
     }
     return this.brain.stepDetailed();
   }

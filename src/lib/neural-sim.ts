@@ -22,7 +22,7 @@ export const REGION_VNC = 2 as Region;
 
 const REVEAL_SECONDS = 0.8;
 /** bump when regenerating public/data bundles — busts immutable browser cache */
-export const DATA_VERSION = 4;
+export const DATA_VERSION = 5;
 
 function gauss(): number {
   let u = 0;

@@ -32,14 +32,27 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
   const toggleFullscreen = () => {
     const el = sectionRef.current;
     if (!el) return;
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void el.requestFullscreen();
+    const anyEl = el as HTMLElement & { webkitRequestFullscreen?: () => void };
+    const doc = document as Document & { webkitExitFullscreen?: () => void; webkitFullscreenElement?: Element | null };
+    if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+      if (doc.exitFullscreen) void doc.exitFullscreen().catch(() => {});
+      else doc.webkitExitFullscreen?.();
+    } else if (anyEl.requestFullscreen) {
+      void anyEl.requestFullscreen().catch(() => {});
+    } else {
+      anyEl.webkitRequestFullscreen?.();
+    }
   };
 
   useEffect(() => {
-    const onFs = () => setIsFs(Boolean(document.fullscreenElement));
+    const onFs = () =>
+      setIsFs(Boolean(document.fullscreenElement || (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement));
     document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
+    document.addEventListener("webkitfullscreenchange", onFs);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      document.removeEventListener("webkitfullscreenchange", onFs);
+    };
   }, []);
 
   const [levels, setLevels] = useState({ motor: 0, central: 0 });

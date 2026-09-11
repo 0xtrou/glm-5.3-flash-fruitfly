@@ -24,12 +24,12 @@ export interface Neuropil {
 
 export const NEUROPHILS: Neuropil[] = [
   // ---- optic lobes (lateral, large) ----
-  { name: "Medulla L", cx: -0.62, cy: 0.05, cz: 0.05, rx: 0.2, ry: 0.28, rz: 0.16 },
-  { name: "Medulla R", cx: 0.62, cy: 0.05, cz: 0.05, rx: 0.2, ry: 0.28, rz: 0.16 },
-  { name: "Lobula L", cx: -0.74, cy: -0.18, cz: -0.05, rx: 0.1, ry: 0.14, rz: 0.12 },
-  { name: "Lobula R", cx: 0.74, cy: -0.18, cz: -0.05, rx: 0.1, ry: 0.14, rz: 0.12 },
-  { name: "Lobula plate L", cx: -0.82, cy: 0.02, cz: -0.12, rx: 0.07, ry: 0.12, rz: 0.09 },
-  { name: "Lobula plate R", cx: 0.82, cy: 0.02, cz: -0.12, rx: 0.07, ry: 0.12, rz: 0.09 },
+  { name: "Medulla L", cx: -0.46, cy: 0.05, cz: 0.05, rx: 0.19, ry: 0.28, rz: 0.16 },
+  { name: "Medulla R", cx: 0.46, cy: 0.05, cz: 0.05, rx: 0.19, ry: 0.28, rz: 0.16 },
+  { name: "Lobula L", cx: -0.6, cy: -0.18, cz: -0.05, rx: 0.1, ry: 0.14, rz: 0.12 },
+  { name: "Lobula R", cx: 0.6, cy: -0.18, cz: -0.05, rx: 0.1, ry: 0.14, rz: 0.12 },
+  { name: "Lobula plate L", cx: -0.68, cy: 0.02, cz: -0.12, rx: 0.07, ry: 0.12, rz: 0.09 },
+  { name: "Lobula plate R", cx: 0.68, cy: 0.02, cz: -0.12, rx: 0.07, ry: 0.12, rz: 0.09 },
 
   // ---- central brain ----
   { name: "Antennal lobe L", cx: -0.18, cy: -0.42, cz: 0.28, rx: 0.1, ry: 0.09, rz: 0.08 },
