@@ -291,8 +291,6 @@ export class LIFBrain {
 
   private partValue = 0;
 
-  private partValue = 0;
-
   /**
    * fraction of nodes that fired within the last `window` substeps
    * (64 substeps = one bar) — "80% of the brain is working" means ≥ 0.8 here.
