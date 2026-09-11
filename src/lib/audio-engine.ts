@@ -6,7 +6,7 @@ export type Lane = 0 | 1 | 2 | 3; // kept for API compat
 
 export interface VisualEvent {
   time: number;
-  type: "kick" | "snare" | "bar" | "drop" | "drop-end";
+  type: "kick" | "snare" | "bar" | "drop" | "drop-end" | "reward";
 }
 
 const BPM = 128;
@@ -402,10 +402,12 @@ class AudioEngine {
           flywireSim.auditEvent(`${note} — no drop`);
           janeliaSim.auditEvent(`${note} — no drop`);
         }
+        this.visualEvents.push({ time: t, type: "reward" });
       } else if (this.brains.ready) {
         const counts = this.brains.lastBarSpikeCounts();
         flywireSim.auditEvent(`bar ${bar}: ${counts.wire} motor spikes (build/roll)`);
         janeliaSim.auditEvent(`bar ${bar}: ${counts.janelia} motor spikes (build/roll)`);
+        this.visualEvents.push({ time: t, type: "reward" });
       }
     }
     if (this.lastDropBar >= 0 && bar >= this.lastDropBar + 8 && s === 0) {

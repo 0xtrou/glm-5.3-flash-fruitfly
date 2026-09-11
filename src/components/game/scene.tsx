@@ -20,7 +20,7 @@ const PERFECT_W = 0.075;
 const GOOD_W = 0.14;
 
 // cross-component frame FX signals
-export const fx = { shakeUntil: 0, dropUntil: 0, r3fAlive: false };
+export const fx = { shakeUntil: 0, dropUntil: 0, rewardUntil: 0, r3fAlive: false };
 
 interface NoteData {
   id: number;
@@ -94,8 +94,10 @@ function Stage() {
   const ring = useRef<Mesh>(null);
   useFrame(() => {
     if (ring.current) {
-      const m = ring.current.material as unknown as { emissiveIntensity: number };
-      m.emissiveIntensity = 0.6 + audioEngine.bassLevel() * 2.4;
+      const reward = performance.now() / 1000 < fx.rewardUntil;
+      const m = ring.current.material as unknown as { emissiveIntensity: number; color: { set: (c: string) => void } };
+      m.emissiveIntensity = 0.6 + audioEngine.bassLevel() * 2.4 + (reward ? 2.6 : 0);
+      void m;
     }
   });
   return (
@@ -176,22 +178,20 @@ const LASER_COLORS = ["#ff4646", "#a855f7", "#ff9f45", "#ec4899", "#38bdf8", "#f
 
 function Lasers() {
   const group = useRef<Group>(null);
-  const mats = useRef<{ m: { opacity: number }; c: string }[]>([]);
   useFrame(({ clock }) => {
     if (!group.current) return;
     const t = clock.elapsedTime;
     const burst = performance.now() / 1000 < fx.dropUntil;
     const speed = useGame.getState().dropped ? 1.6 : 0.7;
     group.current.children.forEach((child, i) => {
+      const reward = performance.now() / 1000 < fx.rewardUntil;
       child.rotation.z = Math.sin(t * speed * (burst ? 2.2 : 1) + i * 1.1) * (burst ? 0.8 : 0.55);
       child.rotation.x = Math.cos(t * speed * 0.7 + i * 0.7) * 0.25;
-    });
-    group.current.children.forEach((child, i) => {
       const mesh = (child as Group).children[0] as Mesh | undefined;
-      if (!mesh) return;
-      const m = mesh.material as unknown as { opacity: number };
-      m.opacity = burst ? 0.85 : 0.5;
-      void mats;
+      if (mesh) {
+        const m = mesh.material as unknown as { opacity: number };
+        m.opacity = burst ? 0.85 : reward ? 0.75 : 0.5;
+      }
     });
   });
   return (
@@ -255,6 +255,10 @@ function EventConsumer() {
         // snares drive MC JANELIA — the hype side
         janeliaSim.inject(REGION_CX, 0.5, 60);
         janeliaSim.inject(REGION_OL, 0.25, 40);
+      }
+      if (ev.type === "reward") {
+        // audit-log landed → emerald reward pulse on the stage
+        fx.rewardUntil = performance.now() / 1000 + 0.45;
       }
       if (ev.type === "drop") {
         fx.shakeUntil = performance.now() / 1000 + 0.9;
