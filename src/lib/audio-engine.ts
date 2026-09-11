@@ -71,6 +71,7 @@ class BrainPlayer {
   }
 
   constructor(weights: BrainWeights, tracks: (typeof FLYWIRE_CORPUS)[], seed: number, boost = 1, ambient = 900) {
+    this.boostFor = boost;
     this.ambient = ambient;
     this.tracks = tracks;
     this.corpus = tracks[0];
@@ -95,6 +96,8 @@ class BrainPlayer {
     this.brain.leak = 0.1;
     this.brain.inputGroups = weights.inputGroups;
     this.brain.motorGroups = weights.motorGroups;
+    // topology arrays were adopted directly — rebuild the synapse pairing map
+    this.brain.rebuildRevPair();
   }
 
   private improvSeed = 7;
@@ -127,8 +130,11 @@ class BrainPlayer {
         // spontaneous off-grid thought
         this.brain.stimulate(ch, 12 + ((this.rand() * 10) | 0), 0.85);
       }
-      // ambient synaptic hum — recruits the full volume every step
-      this.brain.stimulateAmbient(this.ambient, 0.95);
+      // ambient synaptic hum — SUB-threshold (0.18 < min threshold 0.30):
+      // background alone never fires a node, it only biases excitability.
+      // Above-threshold hum saturated the network (8k motor spikes/bar, sync
+      // pinned 1.00 — the brains seized instead of played).
+      this.brain.stimulateAmbient(this.ambient, 0.18);
     }
     return this.brain.stepDetailed();
   }
@@ -460,8 +466,10 @@ class AudioEngine {
             janeliaSim.auditEvent(`TRACK SWITCH → "${t.janelia}"`);
           }
         }
-        const counts = this.brains.lastBarSpikeCounts();
+        // synchrony() snapshots the bar's spike counts before resetting them —
+        // read counts AFTER it so the log line shows the bar it describes
         const sync = this.brains.synchrony();
+        const counts = this.brains.lastBarSpikeCounts();
         const note = `bar ${bar}: ${counts.wire}+${counts.janelia} motor spikes, sync ${sync.toFixed(2)}`;
         if (sync > 0.55 && bar - this.lastDropBar >= 8) {
           this.pendingDrop = true;

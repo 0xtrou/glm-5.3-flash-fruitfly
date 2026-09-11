@@ -21,16 +21,10 @@ brain.preTrace = new Float32Array(w.n);
 brain.postTrace = new Float32Array(w.n);
 brain.inputGroups = w.inputGroups;
 brain.motorGroups = w.motorGroups;
+brain.rebuildRevPair();
 brain.wGain = (w as { wGain?: number }).wGain ?? 1.7;
 brain.ambientCount = (w as { ambient?: number }).ambient ?? 900;
 
-let improvSeed = 7;
-const rand = () => {
-  improvSeed = (improvSeed + 0x9e3779b9) | 0;
-  let t = Math.imul(improvSeed ^ (improvSeed >>> 16), 0x45d9f3b);
-  t = Math.imul(t ^ (t >>> 16), 0x45d9f3b);
-  return ((t ^ (t >>> 16)) >>> 0) / 4294967296;
-};
 
 // histogram of thresholds actually used
 const thSet = new Map<number, number>();
@@ -44,12 +38,12 @@ for (let step = 0; step < 32; step++) {
   for (let ch = 0; ch < 4; ch++) {
     if (FLYWIRE_CORPUS.onsets[ch].includes(step)) brain.stimulate(ch, 44, 1.18);
   }
-  brain.stimulateAmbient(3700, 0.95);
+  // sub-threshold hum, matching the runtime player
+  brain.stimulateAmbient(brain.ambientCount, 0.18);
   brain.step();
 }
 console.log("tSub:", (brain as unknown as { tSub: number }).tSub);
 console.log("bar participation (64 substeps):", (brain.participation(64) * 100).toFixed(1) + "%");
 console.log("4-bar participation (256):", (brain.participation(256) * 100).toFixed(1) + "%");
 
-// where do ambient hits land? sample
 

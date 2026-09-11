@@ -9,6 +9,8 @@ export interface TrainReport {
   metrics: { epoch: number; f1: number; inScale: number; silence: number; reward: number }[];
   /** teacher-free playing score — the real test */
   generationF1: number;
+  /** motor firing on onset steps vs off steps — the rhythm test */
+  onsetSelectivity: number;
   /** fraction of generated motor onsets that are OFF-corpus — structure not copied */
   divergence: number;
   /** distinct generated bar patterns across generation passes — variation, not tape */
@@ -61,14 +63,19 @@ export function trainBrain(
   // teacher-free fine-tune epochs after the main run: consequences only
   const fineTuneEpochs = opts.fineTuneEpochs ?? 40;
 
-  const { graph, inputGroups, motorGroups, descendingEdges } = buildGraphFromDataset(data, {
+  const { graph, inputGroups, motorGroups } = buildGraphFromDataset(data, {
     seed: opts.seed,
     inputPerChannel: 140,
     motorPerChannel: 110,
     channels: corpus.channels,
   });
   const brain = new LIFBrain(graph, { seed: opts.seed, inputGroups, motorGroups });
-  brain.boostLastEdges((descendingEdges ?? 0) * 2, 0.25, 0.3); // axonal strength
+  // NOTE: descending grafts deliberately start WEAK (initial 0.06–0.16
+  // weights, below the elevated motor threshold). Pre-boosting them let
+  // tonic brain chatter fire motor pools continuously — no rhythm. Kept
+  // weak, motor spikes must be earned: STDP strengthens the synapses that
+  // consistently fire just before the motor pools (teacher early, critic
+  // always), which is where the beat comes from.
   const critic = new Critic(corpus);
 
   const STEPS = 64; // 2 corpus loops per epoch (32-step corpus × 2)
@@ -92,7 +99,9 @@ export function trainBrain(
   });
 
   const genProbe = (): number => {
-    let tp = 0, fn = 0;
+    // real F1 — counts false positives too, so checkpoint selection tracks
+    // actual teacher-free quality instead of always returning 1.0
+    let tp = 0, fp = 0, fn = 0;
     for (let step = 0; step < 32; step++) {
       for (let ch = 0; ch < corpus.channels; ch++) {
         if (onsetMask[ch][step]) brain.stimulate(ch, 38, 1.12);
@@ -101,10 +110,11 @@ export function trainBrain(
       for (let ch = 0; ch < corpus.channels; ch++) {
         const spiked = (counts.get(ch) ?? 0) > 0;
         if (spiked && onsetMask[ch][step]) tp++;
+        else if (spiked && !onsetMask[ch][step]) fp++;
         else if (!spiked && onsetMask[ch][step]) fn++;
       }
     }
-    const prec = tp / Math.max(1, tp);
+    const prec = tp / Math.max(1, tp + fp);
     const rec = tp / Math.max(1, tp + fn);
     return (2 * prec * rec) / Math.max(1e-9, prec + rec);
   };
@@ -208,22 +218,26 @@ export function trainBrain(
   if (bestAdjW) brain.adjW.set(bestAdjW);
   console.log(`  best checkpoint: epoch ${bestEpoch} gen f1 ${bestGen.toFixed(3)}`);
 
-  // ---- CALIBRATION: ensure ≥80% of nodes participate during playback ----
-  // simulate playback (context, no teacher) and count unique firing nodes;
-  // raise cascade gain until the target is met
-  brain.wGain = 1.5;
-  let ambientCount = 900;
+  // ---- CALIBRATION: keep the brain alive WITHOUT drowning the beat ----
+  // Ambient hum is sub-threshold (0.15 < min threshold 0.30) and sparse.
+  // Whole-network participation in the 60–100% range is seizure territory:
+  // the resulting tonic chatter integrates over even elevated motor
+  // thresholds and erases all onset structure (runtime evidence: flat ~80
+  // motor spikes/step, sync pinned 1.00). A playing brain runs quiet —
+  // participation target 25%, gain capped low — so motor pools only fire
+  // on real sensory surges and learned reinforcement.
+  brain.wGain = 1.4;
+  let ambientCount = 300;
   let participation = 0;
-  let usedAmbient = 900;
-  // MUST reach ≥80%: escalate gain first, then ambient density. No exceptions.
-  for (let attempt = 0; attempt < 14; attempt++) {
+  let usedAmbient = 300;
+  for (let attempt = 0; attempt < 10; attempt++) {
     // 32-step playback pass ×2, count unique firing nodes via lastFire window
     for (let rep = 0; rep < 2; rep++) {
       for (let step = 0; step < 32; step++) {
         for (let ch = 0; ch < corpus.channels; ch++) {
           if (onsetMask[ch][step]) brain.stimulate(ch, 40, 1.15);
         }
-        brain.stimulateAmbient(ambientCount, 0.95);
+        brain.stimulateAmbient(ambientCount, 0.15);
         brain.step();
       }
     }
@@ -234,18 +248,22 @@ export function trainBrain(
     participation = fired / brain.n;
     usedAmbient = ambientCount;
     console.log(`  calibration ${attempt}: wGain=${brain.wGain.toFixed(2)} ambient=${ambientCount} participation=${(participation * 100).toFixed(0)}%`);
-    if (participation >= 0.8) break;
-    if (brain.wGain < 3.0) brain.wGain += 0.3;
-    else { ambientCount += 400; brain.ambientCount = ambientCount; } // gain maxed — recruit via denser ambient hum
+    if (participation >= 0.25) break;
+    if (brain.wGain < 1.8) brain.wGain += 0.1;
+    else if (ambientCount < 700) { ambientCount += 100; brain.ambientCount = ambientCount; } // gain capped — nudge hum density
+    else break; // caps reached — report the honest number
   }
+  brain.ambientCount = usedAmbient; // export what was actually calibrated
 
   // GENERATION TEST — teacher fully off. The brain must play from its own
   // wiring + learned sensory context. This is the number that matters.
-  // Two passes: pass 0 scores beat-alignment; both passes measure divergence
-  // (off-corpus onsets — structure not copied) and pattern variety.
+  // Two passes: pass 0 scores beat-alignment AND onset selectivity (mean
+  // motor firing on onset channel-steps vs off steps — the rhythm test);
+  // both passes measure divergence (structure not copied) and variety.
   let gtp = 0, gfp = 0, gfn = 0;
   let genOnsets = 0;
   let genOffCorpus = 0;
+  let onsetSum = 0, onsetN = 0, offSum = 0, offN = 0;
   const barPatterns = new Set<string>();
   for (let pass = 0; pass < 2; pass++) {
     let barSig = "";
@@ -255,8 +273,9 @@ export function trainBrain(
       }
       const counts = brain.step();
       for (let ch = 0; ch < corpus.channels; ch++) {
-        const spiked = (counts.get(ch) ?? 0) > 0;
+        const c = counts.get(ch) ?? 0;
         const expected = onsetMask[ch][step];
+        const spiked = c > 0;
         if (spiked) {
           genOnsets++;
           if (!expected) genOffCorpus++;
@@ -264,6 +283,8 @@ export function trainBrain(
         } else {
           barSig += expected ? "3" : "."; // dropped onset vs silence
         }
+        if (expected) { onsetSum += c; onsetN++; }
+        else { offSum += c; offN++; }
         if (pass === 0) {
           if (spiked && expected) gtp++;
           else if (spiked && !expected) gfp++;
@@ -277,14 +298,13 @@ export function trainBrain(
   const gRecall = gtp / Math.max(1, gtp + gfn);
   const generationF1 = (2 * gPrecision * gRecall) / Math.max(1e-9, gPrecision + gRecall);
   const divergence = genOnsets > 0 ? genOffCorpus / genOnsets : 0;
+  // rhythm = motor pools respond on the beat, not constantly
+  const onsetSelectivity = (onsetSum / Math.max(1, onsetN)) / Math.max(0.5, offSum / Math.max(1, offN));
   console.log(
     `  GENERATION (teacher=0): f1=${generationF1.toFixed(3)} precision=${gPrecision.toFixed(3)} recall=${gRecall.toFixed(3)}` +
-      ` divergence=${divergence.toFixed(3)} uniqueBars=${barPatterns.size}`
+      ` divergence=${divergence.toFixed(3)} onsetSelectivity=${onsetSelectivity.toFixed(2)} uniqueBars=${barPatterns.size}`
   );
 
-  const last = metrics.slice(-20);
-  const avgF1 = last.reduce((s, m) => s + m.f1, 0) / last.length;
-  void avgF1;
   return {
     weights: brain.exportWeights(),
     report: {
@@ -293,13 +313,14 @@ export function trainBrain(
       finalTeacher: teacher,
       metrics,
       generationF1,
+      onsetSelectivity,
       divergence,
       uniqueBars: barPatterns.size,
       participation,
       ambientCount: usedAmbient,
       wGain: brain.wGain,
       bestCheckpoint: { epoch: bestEpoch, genF1: bestGen },
-      passed: generationF1 >= 0.35 && participation >= 0.8,
+      passed: generationF1 >= 0.35 && onsetSelectivity >= 1.8 && participation >= 0.10,
       durationMs: Date.now() - t0,
     },
   };

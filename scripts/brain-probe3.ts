@@ -20,10 +20,13 @@ function probe(tag: string, weightsFile: string, corpus: typeof FLYWIRE_CORPUS, 
   brain.refracUntil = new Int32Array(w.n);
   brain.preTrace = new Float32Array(w.n);
   brain.postTrace = new Float32Array(w.n);
-  brain.wGain = 1.45;
+  brain.wGain = (w as { wGain?: number }).wGain ?? 1.45;
   brain.leak = 0.1;
   brain.inputGroups = w.inputGroups;
   brain.motorGroups = w.motorGroups;
+brain.rebuildRevPair();
+  // mirror the runtime player: calibrated ambient hum from the weights bundle
+  const ambient = (w as { ambient?: number }).ambient ?? 900;
 
   let improvSeed = 7;
   const rand = () => {
@@ -45,9 +48,8 @@ function probe(tag: string, weightsFile: string, corpus: typeof FLYWIRE_CORPUS, 
         brain.stimulate(ch, 12 + ((rand() * 10) | 0), 0.85);
       }
     }
-    brain.stimulateAmbient(5200, 1.05);
+    brain.stimulateAmbient(ambient, 0.18);
     const { counts, motorSpikes, centralSpikes } = brain.stepDetailed();
-      brain.stepDetailed();
     motor += motorSpikes;
     central += centralSpikes;
     for (const [ch, c] of counts) perChannel[ch] += c;

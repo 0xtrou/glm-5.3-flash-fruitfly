@@ -31,6 +31,8 @@ export const SUBSTEPS_PER_STEP = 4;
 export interface Weights {
   n: number;
   wGain?: number;
+  /** calibrated ambient-hum density (stimulations per 16th) */
+  ambient?: number;
   adjStart: number[];
   adjPost: number[];
   adjW: number[];
@@ -68,6 +70,8 @@ export class LIFBrain {
   revStart: Uint32Array;
   revPre: Uint32Array;
   revE: Float32Array;
+  /** forward-synapse k → reverse-array index of the SAME synapse (plasticity pairing) */
+  revPair: Int32Array = new Int32Array(0);
   inputGroups: number[][];
   motorGroups: number[][];
   private tSub = 0;
@@ -138,11 +142,46 @@ export class LIFBrain {
     this.refracUntil = new Int32Array(n);
     this.recent = new Float32Array(n);
     this.lastFire = new Float32Array(n).fill(-1e9);
-    // heterogeneous excitability: thresholds 0.55..0.95 (real neurons vary)
+    // heterogeneous excitability: thresholds 0.30..0.48 (real neurons vary).
+    // Motor-pool nodes get a +0.35 elevation: tonic drive (ambient hum, weak
+    // synapses) can never fire them alone — only coordinated, reinforced
+    // input crosses. Without this the pools fire tonically and the beat dies.
     this.thresh = new Float32Array(n);
     for (let i = 0; i < n; i++) this.thresh[i] = 0.30 + (i % 7) * 0.03;
     this.inputGroups = opts.inputGroups;
     this.motorGroups = opts.motorGroups;
+    for (const g of this.motorGroups) {
+      for (const i of g) this.thresh[i] += 0.35;
+    }
+    this.rebuildRevPair();
+  }
+
+  /**
+   * Map each forward synapse k to its index in the reverse arrays (same
+   * pre→post synapse, stored under its post node). Plasticity must pair
+   * causal (adjE) and anti-causal (revE) eligibility of the SAME synapse —
+   * summing adjE[k] + revE[k] unpaired mixes unrelated synapses and the
+   * learning signal cancels itself.
+   */
+  rebuildRevPair() {
+    this.revPair = new Int32Array(this.adjPost.length);
+    for (let i = 0; i < this.n; i++) {
+      const from = this.adjStart[i];
+      const to = this.adjStart[i + 1];
+      for (let k = from; k < to; k++) {
+        const post = this.adjPost[k];
+        const rfrom = this.revStart[post];
+        const rto = this.revStart[post + 1];
+        let found = -1;
+        for (let j = rfrom; j < rto; j++) {
+          if (this.revPre[j] === i) {
+            found = j;
+            break;
+          }
+        }
+        this.revPair[k] = found;
+      }
+    }
   }
 
   /** xorshift32 — distinct value every call */
@@ -243,14 +282,15 @@ export class LIFBrain {
     if (dopamine === 0) return;
     const d = dopamine > 0 ? dopamine : dopamine * 0.4; // punish softer than reward
     for (let k = 0; k < this.adjW.length; k++) {
-      const e = this.adjE[k] + this.revE[k];
+      const pair = this.revPair[k];
+      const e = pair >= 0 ? this.adjE[k] + this.revE[pair] : this.adjE[k];
       if (e > 0.02 || e < -0.02) {
         let w = this.adjW[k] + lr * d * e;
         if (w > W_MAX_EXC) w = W_MAX_EXC;
         else if (w < W_MIN_INH) w = W_MIN_INH;
         this.adjW[k] = w;
         this.adjE[k] = 0;
-        this.revE[k] = 0;
+        if (pair >= 0) this.revE[pair] = 0;
       }
     }
   }
@@ -317,6 +357,7 @@ export class LIFBrain {
     return {
       n: this.n,
       wGain: this.wGain,
+      ambient: this.ambientCount,
       adjStart: Array.from(this.adjStart),
       adjPost: Array.from(this.adjPost),
       adjW: Array.from(this.adjW, (x) => Math.round(x * 1000) / 1000),
@@ -417,17 +458,20 @@ export function buildGraphFromDataset(
     // sorted ascending — binarySearch membership depends on it
     motorGroups.push(vncNodes.slice(c * opts.motorPerChannel, (c + 1) * opts.motorPerChannel).sort((a, b) => a - b));
   }
-  // Modeled descending neurons: real fly CNS routes brain→VNC through a small
-  // population of descending axons; cable-only reconstructions lack them, so we
-  // graft a sparse set (declared in PHILOSOPHY.md / PROVENANCE.md). Targets =
-  // motor pools (that is what descending neurons synapse onto), dense enough
-  // that every motor neuron converges multiple descending inputs.
+  // Modeled descending pathways — CHANNEL-SPECIFIC (labeled lines): each
+  // sensory channel projects to its OWN motor pool, like modality-specific
+  // descending tracts. The previous wiring sprayed 200 random brain nodes ×25
+  // edges over all pools: onset information had no route to survive, motor
+  // pools received a channel-blind tonic mix, and no amount of STDP could
+  // recover rhythm. Targeted pairs give the beat a path; plasticity tunes
+  // the gain of each line (declared in PHILOSOPHY.md / PROVENANCE.md).
   const extra: [number, number][] = [];
-  const descenders = brainNodes.slice(0, Math.min(200, brainNodes.length));
-  const allMotor = motorGroups.flat();
-  for (const pre of descenders) {
-    for (let k = 0; k < 25; k++) {
-      extra.push([pre, allMotor[(rand() * allMotor.length) | 0]]);
+  for (let c = 0; c < opts.channels; c++) {
+    const pool = motorGroups[c];
+    for (const pre of inputGroups[c]) {
+      for (let k = 0; k < 3; k++) {
+        extra.push([pre, pool[(rand() * pool.length) | 0]]);
+      }
     }
   }
   return {
