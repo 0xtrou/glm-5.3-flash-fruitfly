@@ -26,6 +26,22 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
   const [webglFailed, setWebglFailed] = useState(false);
   const webglRef = useRef(false);
   const [loadPct, setLoadPct] = useState(0);
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isFs, setIsFs] = useState(false);
+
+  const toggleFullscreen = () => {
+    const el = sectionRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void el.requestFullscreen();
+  };
+
+  useEffect(() => {
+    const onFs = () => setIsFs(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
   const [levels, setLevels] = useState({ motor: 0, central: 0 });
   const [info, setInfo] = useState({ real: false, neurons: 0, points: 0, archives: [] as string[] });
 
@@ -83,7 +99,17 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
         <h2 className="text-[11px] font-black tracking-[0.14em]" style={{ color: accent }}>
           CNS <span className="opacity-40">/</span> {title}
         </h2>
-        <span className="font-mono text-[9px] text-emerald-300/50">independent sim · NeuroMorpho.org</span>
+        <span className="flex items-center gap-2">
+          <span className="font-mono text-[9px] text-emerald-300/50">independent sim · NeuroMorpho.org</span>
+          <button
+            onClick={toggleFullscreen}
+            className="rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] leading-none text-white/60 transition hover:border-white/40 hover:text-white"
+            aria-label={isFs ? "Exit fullscreen" : "Fullscreen brain"}
+            title={isFs ? "Exit fullscreen" : "Fullscreen brain"}
+          >
+            {isFs ? "⤡" : "⛶"}
+          </button>
+        </span>
       </header>
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
