@@ -237,7 +237,8 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
     const lineMat = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.4,
+      blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
 
@@ -544,16 +545,16 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
           if (lastFire) {
             const sa = tSub - lastFire[a];
             const sb = tSub - lastFire[b];
-            if (sa >= 0 && sa < FRESH) target = (1 - sa / FRESH) * 1.1;
-            if (sb >= 0 && sb < FRESH) target = Math.max(target, (1 - sb / FRESH) * 1.1);
+            if (sa >= 0 && sa < FRESH) target = (1 - sa / FRESH) * 1.6;
+            if (sb >= 0 && sb < FRESH) target = Math.max(target, (1 - sb / FRESH) * 1.6);
           }
           const g = smooth(edgeGlowArr[e], target, dt);
           edgeGlowArr[e] = g;
-          // base silver-blue, lifted toward fire-white as signals traverse
-          const w = Math.min(1, g);
-          const r = 0.44 + (1.0 - 0.44) * w;
-          const gg = 0.56 + (1.0 - 0.56) * w;
-          const bl = 0.82 + (0.9 - 0.82) * w;
+          // additive: idle strands stay dim silver, traversed edges flare white-hot
+          const w = Math.min(1, g * 1.4);
+          const r = 0.30 + w * 1.5;
+          const gg = 0.40 + w * 1.4;
+          const bl = 0.62 + w * 0.7;
           const v0 = e * 6;
           lc[v0] = r; lc[v0 + 1] = gg; lc[v0 + 2] = bl;
           lc[v0 + 3] = r; lc[v0 + 4] = gg; lc[v0 + 5] = bl;
@@ -561,7 +562,7 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
         edgeColorAttr.needsUpdate = true;
       }
       // cables breathe with population firing
-      lineMat.opacity = 0.24 + 0.1 * Math.min(1, hot / 800);
+      lineMat.opacity = 0.3 + 0.12 * Math.min(1, hot / 800);
 
       const somaAttr = somaGeo.getAttribute("aAct") as THREE.BufferAttribute;
       const sArr = somaAttr.array as Float32Array;
