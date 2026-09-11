@@ -20,6 +20,8 @@ function probe(tag: string, weightsFile: string, corpus: typeof FLYWIRE_CORPUS, 
   brain.refracUntil = new Int32Array(w.n);
   brain.preTrace = new Float32Array(w.n);
   brain.postTrace = new Float32Array(w.n);
+  brain.wGain = 1.45;
+  brain.leak = 0.1;
   brain.inputGroups = w.inputGroups;
   brain.motorGroups = w.motorGroups;
 
@@ -43,13 +45,17 @@ function probe(tag: string, weightsFile: string, corpus: typeof FLYWIRE_CORPUS, 
         brain.stimulate(ch, 12 + ((rand() * 10) | 0), 0.85);
       }
     }
+    brain.stimulateAmbient(300, 0.85);
     const { counts, motorSpikes, centralSpikes } = brain.stepDetailed();
+      brain.stepDetailed();
     motor += motorSpikes;
     central += centralSpikes;
     for (const [ch, c] of counts) perChannel[ch] += c;
   }
-  console.log(`${tag}: motor=${motor} central=${central} perChannel=${perChannel.join(",")}`);
+  console.log(`${tag}: motor=${motor} central=${central} perChannel=${perChannel.join(",")} bar-participation=${(brain.participation(64) * 100).toFixed(0)}%`);
 }
 
 probe("WIRE", "weights-wire.json", FLYWIRE_CORPUS, 11);
 probe("JANELIA", "weights-janelia.json", JANELIA_CORPUS, 47);
+
+// participation probe — appended

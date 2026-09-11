@@ -72,6 +72,14 @@ export class LIFBrain {
   private tSub = 0;
   private rng: () => number;
   private rngState: number;
+  /** delivered-weight multiplier — runtime cascade gain (training uses 1) */
+  wGain = 1;
+  /** membrane leak per substep */
+  leak = 0.12;
+  thresh = new Float32Array(0);
+  recent = new Float32Array(0);
+  /** absolute substep of last fire per node */
+  lastFire = new Float32Array(0);
 
   constructor(graph: GraphData, opts: BrainBuildOptions) {
     this.rng = mulberry32(opts.seed);
@@ -126,6 +134,11 @@ export class LIFBrain {
 
     this.v = new Float32Array(n);
     this.refracUntil = new Int32Array(n);
+    this.recent = new Float32Array(n);
+    this.lastFire = new Float32Array(n).fill(-1e9);
+    // heterogeneous excitability: thresholds 0.55..0.95 (real neurons vary)
+    this.thresh = new Float32Array(n);
+    for (let i = 0; i < n; i++) this.thresh[i] = 0.55 + (i % 7) * 0.055;
     this.inputGroups = opts.inputGroups;
     this.motorGroups = opts.motorGroups;
   }
@@ -148,6 +161,14 @@ export class LIFBrain {
     }
   }
 
+  /** global weak stimulation — background synaptic hum across all regions */
+  stimulateAmbient(count: number, energy: number) {
+    for (let k = 0; k < count; k++) {
+      const i = (this.rand() * this.n) | 0;
+      this.v[i] += energy;
+    }
+  }
+
   teach(channel: number, count = 10) {
     const g = this.motorGroups[channel % this.motorGroups.length];
     for (let k = 0; k < count; k++) {
@@ -164,15 +185,18 @@ export class LIFBrain {
     const t = this.tSub;
     // decay pairing traces
     for (let i = 0; i < this.n; i++) {
+      if (this.recent[i] > 0.001) this.recent[i] *= 0.93;
       if (this.preTrace[i] > 0.001) this.preTrace[i] *= 0.85;
       if (this.postTrace[i] > 0.001) this.postTrace[i] *= 0.85;
     }
     for (let i = 0; i < this.n; i++) {
       if (this.refracUntil[i] > t) continue;
-      this.v[i] += -this.v[i] * 0.12;
-      if (this.v[i] >= 1.0) {
+      this.v[i] += -this.v[i] * this.leak;
+      if (this.v[i] >= this.thresh[i]) {
         this.v[i] = -0.2;
         this.refracUntil[i] = t + 2;
+        this.recent[i] = 1;
+        this.lastFire[i] = t;
         spikes.push(i);
       }
     }
@@ -184,7 +208,7 @@ export class LIFBrain {
       for (let k = from; k < to; k++) {
         this.adjE[k] += 1 - this.postTrace[this.adjPost[k]];
         const post = this.adjPost[k];
-        if (this.refracUntil[post] <= t) this.v[post] += this.adjW[k];
+        if (this.refracUntil[post] <= t) this.v[post] += this.adjW[k] * this.wGain;
       }
     }
     // STDP pairing (on post spike): punish inputs that fired too late
@@ -263,6 +287,24 @@ export class LIFBrain {
     for (let k = start; k < this.adjW.length; k++) {
       if (this.adjW[k] > 0) this.adjW[k] = min + this.rand() * range;
     }
+  }
+
+  private partValue = 0;
+
+  private partValue = 0;
+
+  /**
+   * fraction of nodes that fired within the last `window` substeps
+   * (64 substeps = one bar) — "80% of the brain is working" means ≥ 0.8 here.
+   */
+  participation(windowSubsteps = 256): number {
+    let c = 0;
+    const t = this.tSub;
+    for (let i = 0; i < this.n; i++) {
+      if (t - this.lastFire[i] < windowSubsteps) c++;
+    }
+    this.partValue = c / Math.max(1, this.n);
+    return this.partValue;
   }
 
   exportWeights(): Weights {

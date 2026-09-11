@@ -90,6 +90,9 @@ class BrainPlayer {
     this.brain.refracUntil = new Int32Array(weights.n);
     this.brain.preTrace = new Float32Array(weights.n);
     this.brain.postTrace = new Float32Array(weights.n);
+    // cascade gain — pushes activity deep into the network (80%+ participation)
+    this.brain.wGain = 1.7;
+    this.brain.leak = 0.1;
     this.brain.inputGroups = weights.inputGroups;
     this.brain.motorGroups = weights.motorGroups;
   }
@@ -123,6 +126,8 @@ class BrainPlayer {
         // spontaneous off-grid thought
         this.brain.stimulate(ch, 12 + ((this.rand() * 10) | 0), 0.85);
       }
+      // ambient synaptic hum — recruits the full volume every step
+      this.brain.stimulateAmbient(500, 0.9);
     }
     return this.brain.stepDetailed();
   }
@@ -189,7 +194,7 @@ class BrainModeController {
       { voice: "bass" },
     ];
     for (const [ch, count] of wireCounts) {
-      if (count <= 0) continue;
+      if (count < 3) continue; // ambient scatter stays silent — only bursts play
       this.barSpikes.wire += count;
       const m = wireMap[ch] ?? { voice: "hat" as const };
       notes.push({ fly: "wire", channel: ch, voice: m.voice, count, time });
@@ -207,7 +212,7 @@ class BrainModeController {
       { voice: "bass" },
     ];
     for (const [ch, count] of jCounts) {
-      if (count <= 0) continue;
+      if (count < 3) continue;
       this.barSpikes.janelia += count;
       const m = jMap[ch] ?? { voice: "hat" as const };
       notes.push({ fly: "janelia", channel: ch, voice: m.voice, count, time });
