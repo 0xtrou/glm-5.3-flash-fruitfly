@@ -270,6 +270,16 @@ class BrainModeController {
     return this.lastBarCounts;
   }
 
+  /** fraction of nodes (0..1) that fired within the last `windowSubsteps` —
+   *  per brain; utilization the audit log reports each bar */
+  participation(windowSubsteps = 256): { wire: number; janelia: number } {
+    if (!this.players) return { wire: 0, janelia: 0 };
+    return {
+      wire: this.players.wire.brain.participation(windowSubsteps),
+      janelia: this.players.janelia.brain.participation(windowSubsteps),
+    };
+  }
+
   trackNames(): { wire: string; janelia: string } | null {
     if (!this.players) return null;
     return { wire: this.players.wire.trackStyle, janelia: this.players.janelia.trackStyle };
@@ -470,7 +480,10 @@ class AudioEngine {
         // read counts AFTER it so the log line shows the bar it describes
         const sync = this.brains.synchrony();
         const counts = this.brains.lastBarSpikeCounts();
-        const note = `bar ${bar}: ${counts.wire}+${counts.janelia} motor spikes, sync ${sync.toFixed(2)}`;
+        const util = this.brains.participation(512); // nodes fired in last 4 bars — matches calibration
+        const note =
+          `bar ${bar}: ${counts.wire}+${counts.janelia} motor spikes, ` +
+          `util ${(util.wire * 100).toFixed(0)}%+${(util.janelia * 100).toFixed(0)}%, sync ${sync.toFixed(2)}`;
         if (sync > 0.55 && bar - this.lastDropBar >= 8) {
           this.pendingDrop = true;
           this.lastDropBar = bar;
@@ -483,8 +496,13 @@ class AudioEngine {
         this.visualEvents.push({ time: t, type: "reward" });
       } else if (this.brains.ready) {
         const counts = this.brains.lastBarSpikeCounts();
-        flywireSim.auditEvent(`bar ${bar}: ${counts.wire} motor spikes (build/roll)`);
-        janeliaSim.auditEvent(`bar ${bar}: ${counts.janelia} motor spikes (build/roll)`);
+        const util = this.brains.participation(512);
+        flywireSim.auditEvent(
+          `bar ${bar}: ${counts.wire} motor spikes, util ${(util.wire * 100).toFixed(0)}% (build/roll)`
+        );
+        janeliaSim.auditEvent(
+          `bar ${bar}: ${counts.janelia} motor spikes, util ${(util.janelia * 100).toFixed(0)}% (build/roll)`
+        );
         this.visualEvents.push({ time: t, type: "reward" });
       }
     }

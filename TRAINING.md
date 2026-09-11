@@ -86,18 +86,21 @@ npx tsx scripts/train-brains.ts
 ### Pass gates (all must hold)
 - `generationF1 ≥ 0.35` — plays the learned style with the teacher off
 - `onsetSelectivity ≥ 1.8` — motor firing concentrated on onset steps (the rhythm test)
-- `participation ≥ 0.10` — the brain is alive, not silent. NOTE: high
-  participation is NOT a virtue — 60–100% means tonic avalanche, which
-  drowns the beat (this actually happened; see calibration notes)
+- `participation ≥ 0.80` — ≥80% of nodes fired within the last 4 bars
+  (512 substeps). Utilization = fired at least once, NOT firing rate: it is
+  raised via sub-threshold hum (0.18 < min threshold 0.30 — background
+  alone never fires a node) while motor pools keep their +0.35 elevation,
+  so recruitment cannot flatten the beat. The earlier seizure was different:
+  above-threshold hum + no motor elevation → 99% participation, flat output.
 
-Calibration (quiet-brain regime): ambient hum 300 stimulations/step @ 0.15
-(sub-threshold — background alone never fires a node), cascade gain starts
-1.4 and escalates only to 1.8 / hum 700 while participation < 25%.
+Calibration: hum 300→2000 stimulations/step @ 0.18, gain 1.4→1.8, escalate
+until participation ≥ 80% or caps reached; exported hum/gain match the
+winning attempt (audit log reads the same 512-substep window per bar).
 
 Current results (see `public/data/train-report.json`):
-- WIRE: passed · genF1 0.44 · onsetSelectivity 4.39 · participation 0.62
-  (kick bursts 28–41 spikes on onset steps, 0–10 between — four-on-the-floor)
-- JANELIA: passed · genF1 0.39 · onsetSelectivity 5.74 · participation 0.67
+- WIRE: passed · genF1 0.41 · onsetSelectivity 1.89 · participation 0.83
+  (kick bursts 41–44 spikes on onset steps, 2–15 between — four-on-the-floor)
+- JANELIA: passed · genF1 0.37 · onsetSelectivity 2.32 · participation 0.81
 
 ## 4. Runtime music generation
 

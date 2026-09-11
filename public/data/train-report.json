@@ -1,5 +1,5 @@
 {
-  "trainedAt": "2026-09-11T14:01:52.984Z",
+  "trainedAt": "2026-09-11T14:17:08.125Z",
   "corpora": {
     "wire": "straight 4/4 techno",
     "janelia": "syncopated breaks"
@@ -4910,20 +4910,20 @@
         "reward": -0.23203125000000002
       }
     ],
-    "generationF1": 0.4370860927152318,
-    "onsetSelectivity": 4.391562685680333,
-    "divergence": 0.7191489361702128,
-    "uniqueBars": 2,
-    "participation": 0.6170138888888889,
-    "ambientCount": 300,
-    "wGain": 1.4,
+    "generationF1": 0.40993788819875776,
+    "onsetSelectivity": 1.8883254367782056,
+    "divergence": 0.7421875,
+    "uniqueBars": 1,
+    "participation": 0.8301388888888889,
+    "ambientCount": 1800,
+    "wGain": 1.8000000000000003,
     "bestCheckpoint": {
       "epoch": 420,
       "genF1": 0.6111111111111112
     },
     "passed": true,
-    "durationMs": 48526,
-    "weightsBytes": 3101167
+    "durationMs": 48666,
+    "weightsBytes": 3366401
   },
   "janelia": {
     "style": "syncopated breaks",
@@ -8431,19 +8431,19 @@
         "reward": -0.12890625
       }
     ],
-    "generationF1": 0.38926174496644295,
-    "onsetSelectivity": 5.738444144888463,
-    "divergence": 0.7583333333333333,
-    "uniqueBars": 2,
-    "participation": 0.6666666666666666,
-    "ambientCount": 300,
-    "wGain": 1.4,
+    "generationF1": 0.36942675159235666,
+    "onsetSelectivity": 2.3153931719004017,
+    "divergence": 0.7734375,
+    "uniqueBars": 1,
+    "participation": 0.8115873391743627,
+    "ambientCount": 1050,
+    "wGain": 1.8000000000000003,
     "bestCheckpoint": {
       "epoch": 40,
       "genF1": 0.6516853932584269
     },
     "passed": true,
-    "durationMs": 31801,
-    "weightsBytes": 2755135
+    "durationMs": 31162,
+    "weightsBytes": 2901789
   }
 }

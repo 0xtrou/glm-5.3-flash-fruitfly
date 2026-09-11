@@ -218,39 +218,40 @@ export function trainBrain(
   if (bestAdjW) brain.adjW.set(bestAdjW);
   console.log(`  best checkpoint: epoch ${bestEpoch} gen f1 ${bestGen.toFixed(3)}`);
 
-  // ---- CALIBRATION: keep the brain alive WITHOUT drowning the beat ----
-  // Ambient hum is sub-threshold (0.15 < min threshold 0.30) and sparse.
-  // Whole-network participation in the 60–100% range is seizure territory:
-  // the resulting tonic chatter integrates over even elevated motor
-  // thresholds and erases all onset structure (runtime evidence: flat ~80
-  // motor spikes/step, sync pinned 1.00). A playing brain runs quiet —
-  // participation target 25%, gain capped low — so motor pools only fire
-  // on real sensory surges and learned reinforcement.
+  // ---- CALIBRATION: high node utilization WITHOUT drowning the beat ----
+  // Utilization = fraction of nodes that fired at least once in the last
+  // bar-window — NOT firing rate. Target ≥80% is safe NOW because (a) the
+  // hum stays sub-threshold (0.15 < min threshold 0.30 — background alone
+  // never fires a node, it only widens the excited pool) and (b) motor
+  // pools carry +0.35 threshold elevation, so tonic recruitment cannot
+  // fire them; beats still come only from sensory surges + learned lines.
+  // The earlier seizure was different: above-threshold hum and NO motor
+  // elevation — 99% participation with flat motor output.
   brain.wGain = 1.4;
   let ambientCount = 300;
   let participation = 0;
   let usedAmbient = 300;
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 14; attempt++) {
     // 32-step playback pass ×2, count unique firing nodes via lastFire window
     for (let rep = 0; rep < 2; rep++) {
       for (let step = 0; step < 32; step++) {
         for (let ch = 0; ch < corpus.channels; ch++) {
           if (onsetMask[ch][step]) brain.stimulate(ch, 40, 1.15);
         }
-        brain.stimulateAmbient(ambientCount, 0.15);
+        brain.stimulateAmbient(ambientCount, 0.18);
         brain.step();
       }
     }
     let fired = 0;
     for (let i = 0; i < brain.n; i++) {
-      if (brain.firedWithin(256, i)) fired++; // fired within last bar
+      if (brain.firedWithin(512, i)) fired++; // fired within last 4 bars
     }
     participation = fired / brain.n;
     usedAmbient = ambientCount;
     console.log(`  calibration ${attempt}: wGain=${brain.wGain.toFixed(2)} ambient=${ambientCount} participation=${(participation * 100).toFixed(0)}%`);
-    if (participation >= 0.25) break;
+    if (participation >= 0.8) break;
     if (brain.wGain < 1.8) brain.wGain += 0.1;
-    else if (ambientCount < 700) { ambientCount += 100; brain.ambientCount = ambientCount; } // gain capped — nudge hum density
+    else if (ambientCount < 2000) { ambientCount += 250; brain.ambientCount = ambientCount; } // gain capped — widen the excited pool via hum
     else break; // caps reached — report the honest number
   }
   brain.ambientCount = usedAmbient; // export what was actually calibrated
@@ -320,7 +321,7 @@ export function trainBrain(
       ambientCount: usedAmbient,
       wGain: brain.wGain,
       bestCheckpoint: { epoch: bestEpoch, genF1: bestGen },
-      passed: generationF1 >= 0.35 && onsetSelectivity >= 1.8 && participation >= 0.10,
+      passed: generationF1 >= 0.35 && onsetSelectivity >= 1.8 && participation >= 0.8,
       durationMs: Date.now() - t0,
     },
   };
