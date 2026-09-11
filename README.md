@@ -92,17 +92,25 @@ per-node firing on the brain renders, per-fly utilization, spike counts and
 drop decisions in the audit log — all from the same spikes that make the
 sound.
 
-## What is modeled
+## Scale check
 
-The reconstructions are real; several things built on top of them are not,
-and are worth stating plainly:
+| A real fly | FLYTAPE |
+|---|---|
+| ~140,000 neurons in the central brain (FlyWire 783) | 70 reconstructions, simulated as 27,069 nodes across two brains |
+| 51.7 million synapses | ~96,000 modeled synapses per brain — about 280x fewer than one fly, split between two DJs |
+| Neurons with dozens of ion channels and dendritic computation | one voltage number, a threshold between 0.30 and 0.83, a two-substep refractory period |
+| Dopamine delivered by dedicated neuromodulatory neurons | a single float in [-1, 1], multiplied into synapse weights |
+| Spikes last ~1 ms; the STDP window is ~20 ms | substeps last ~39 ms at 96 BPM — the whole brain runs ~40x slower than real time, and the flies do not mind |
+| Learns in a few trials | 500 epochs of 64 steps, about 45 seconds of a laptop CPU |
+| A whole brain runs on microwatts | one browser tab |
+| Sings by vibrating its wings at ~200 Hz — courtship, not music | eight records, two of them Beethoven IDM cuts |
+| Lives about 60 days | two JSON files, roughly 7 MB |
 
-- Real flies have ~140,000 neurons and 51.7 million synapses. This is 70
-  neurons and ~96,000 modeled synapses per brain.
-- Cable edges are genuine; inter-neuron synapses, branch grafts, and
-  descending lines are modeled structure, documented in the code.
-- Thresholds, weights, and hum are modeled parameters. The training report
-  records whatever they produce.
+The reconstructions are real; everything grafted on top is declared, not
+hidden: cable edges are genuine, inter-neuron synapses and branch grafts
+and descending lines are modeled structure documented in the code, and
+thresholds, weights, and hum are modeled parameters. The training report
+ships whatever those parameters produce, unedited.
 
 ## Running it
 
