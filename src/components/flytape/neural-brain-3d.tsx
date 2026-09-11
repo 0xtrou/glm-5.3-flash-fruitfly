@@ -303,7 +303,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       const span = Math.max(maxX - minX, maxY - minY, (maxZ - minZ) * DEPTH_SCALE, 1e-6);
       const S = CONTENT_SPAN / span;
       const px = (i: number) => (sim.x[i] - cx) * S;
-      const py = (i: number) => (cy - sim.y[i]) * S; // flip: dataset y grows downward
+      const py = (i: number) => (sim.y[i] - cy) * S; // brain band up top, VNC hangs down
       const pz = (i: number) => (sim.z[i] - cz) * S * DEPTH_SCALE;
 
       const shown = sim.revealedCount();

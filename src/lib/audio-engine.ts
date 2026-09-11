@@ -51,7 +51,8 @@ class BrainPlayer {
   brain: LIFBrain;
   private corpus: typeof FLYWIRE_CORPUS;
 
-  constructor(weights: BrainWeights, corpus: typeof FLYWIRE_CORPUS, seed: number) {
+  constructor(weights: BrainWeights, corpus: typeof FLYWIRE_CORPUS, seed: number, boost = 1) {
+    this.boostFor = boost;
     this.corpus = corpus;
     this.brain = new LIFBrain(
       { points: new Array(weights.n).fill(0) as [number, number, number][], edges: [], neuronCount: weights.n },
@@ -74,6 +75,7 @@ class BrainPlayer {
   }
 
   private improvSeed = 7;
+  private boostFor = 1;
 
   private rand(): number {
     // xorshift — varies per call, gives each pass through the corpus a life of its own
@@ -93,9 +95,10 @@ class BrainPlayer {
   step(cStep: number): { counts: Map<number, number>; motorSpikes: number; centralSpikes: number } {
     for (let ch = 0; ch < this.corpus.channels; ch++) {
       const on = this.corpus.onsets[ch].includes(cStep);
+      const boost = this.boostFor;
       if (on && this.rand() < 0.94) {
         const extra = this.rand() < 0.1 ? 14 : 0;
-        this.brain.stimulate(ch, 38 + ((this.rand() * 12) | 0) + extra, 1.12 + this.rand() * 0.1);
+        this.brain.stimulate(ch, Math.round((38 + ((this.rand() * 12) | 0) + extra) * boost), (1.12 + this.rand() * 0.1) * Math.min(1.15, boost));
       } else if (!on && this.rand() < 0.05) {
         // spontaneous off-grid thought
         this.brain.stimulate(ch, 12 + ((this.rand() * 10) | 0), 0.85);
@@ -136,8 +139,8 @@ class BrainModeController {
         fetch(`/data/weights-janelia.json?v=${DATA_VERSION}`).then((r) => r.json()),
       ]);
       this.players = {
-        wire: new BrainPlayer(w, FLYWIRE_CORPUS, 11),
-        janelia: new BrainPlayer(j, JANELIA_CORPUS, 47),
+        wire: new BrainPlayer(w, FLYWIRE_CORPUS, 11, 1.3),
+        janelia: new BrainPlayer(j, JANELIA_CORPUS, 47, 1.0),
       };
       this.loaded = true;
     } finally {
