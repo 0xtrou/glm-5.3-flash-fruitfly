@@ -42,7 +42,7 @@ const MAX_PULSES = 160;
 const PULSE_FLOOR = 80; // keep at least this many signals in flight
 const CONTENT_SPAN = 10; // largest bbox dimension maps to this many scene units
 const DEPTH_SCALE = 0.55; // flatten z into a slab so the organ reads like FlyWire's map
-const ORBIT_SPEED = 0.05; // rad/s around Y
+const ORBIT_SPEED = 0; // static camera — user request: no rotation
 const ELEVATION = 0.3; // camera height angle
 const FOV = 42;
 
@@ -84,7 +84,7 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   float fire = aAct <= 0.0 ? 0.0 : smoothstep(0.15, 1.15, aAct);
   float size = (2.3 + aDeg * 1.1) * (1.0 + fire * 1.8);
-  gl_PointSize = clamp(size * uDpr * uRefDist / max(1.0, -mv.z), 1.0, 30.0);
+  gl_PointSize = clamp(size * uDpr * uRefDist / max(1.0, -mv.z), 1.0, 7.0);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -126,7 +126,7 @@ void main() {
   vHue = aHue;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   float size = 3.4 + smoothstep(0.0, 1.0, max(vAct, 0.0)) * 2.6;
-  gl_PointSize = clamp(size * uDpr * uRefDist / max(1.0, -mv.z), 1.0, 30.0);
+  gl_PointSize = clamp(size * uDpr * uRefDist / max(1.0, -mv.z), 1.0, 7.0);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -155,7 +155,7 @@ void main() {
   vA = aAlpha;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   float size = 2.4 + aAlpha * 3.0;
-  gl_PointSize = clamp(size * uDpr * uRefDist / max(1.0, -mv.z), 1.0, 22.0);
+  gl_PointSize = clamp(size * uDpr * uRefDist / max(1.0, -mv.z), 1.0, 6.0);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -210,14 +210,14 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       for (let i = 0; i < starCount; i++) {
         const th = Math.random() * Math.PI * 2;
         const ph = Math.acos(2 * Math.random() - 1);
-        const r = 30 + Math.random() * 40;
+        const r = 45 + Math.random() * 45;
         sp[i * 3] = r * Math.sin(ph) * Math.cos(th);
         sp[i * 3 + 1] = r * Math.cos(ph);
         sp[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
       }
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.BufferAttribute(sp, 3));
-      const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x8fa8d8, size: 0.35, transparent: true, opacity: 0.55, sizeAttenuation: true }));
+      const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x8fa8d8, size: 1.8, transparent: true, opacity: 0.4, sizeAttenuation: false }));
       stars.frustumCulled = false;
       scene.add(stars);
     }
@@ -408,24 +408,18 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       for (const np of NEUROPHILS) {
         const seg = 36;
         const pts1: THREE.Vector3[] = [];
-        const pts2: THREE.Vector3[] = [];
         for (let i = 0; i <= seg; i++) {
           const a = (i / seg) * Math.PI * 2;
           pts1.push(new THREE.Vector3(Math.cos(a) * np.rx, Math.sin(a) * np.ry, 0));
-          pts2.push(new THREE.Vector3(0, Math.sin(a) * np.ry, Math.cos(a) * np.rz));
         }
         const g1 = new THREE.BufferGeometry().setFromPoints(
           pts1.map((v) => new THREE.Vector3((np.cx - cx) * S + v.x * S, (cy - np.cy) * S + v.y * S, (np.cz - cz) * S + v.z * S * DEPTH_SCALE))
         );
-        const g2 = new THREE.BufferGeometry().setFromPoints(
-          pts2.map((v) => new THREE.Vector3((np.cx - cx) * S + v.x * S, (cy - np.cy) * S + v.y * S, (np.cz - cz) * S + v.z * S * DEPTH_SCALE))
-        );
-        const lm = new THREE.LineBasicMaterial({ color: 0x4a6ab8, transparent: true, opacity: 0.16, depthWrite: false });
+        const lm = new THREE.LineBasicMaterial({ color: 0x4a6ab8, transparent: true, opacity: 0.08, depthWrite: false });
         const l1 = new THREE.Line(g1, lm);
-        const l2 = new THREE.Line(g2, lm);
-        neuropilGeos.push(g1, g2);
-        group.add(l1, l2);
-        neuropilObjs.push(l1, l2);
+        neuropilGeos.push(g1);
+        group.add(l1);
+        neuropilObjs.push(l1);
       }
 
       // somata — root node of each reconstructed neuron, slightly larger
@@ -559,38 +553,6 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       // cables breathe with population firing
       lineMat.opacity = 0.24 + 0.1 * Math.min(1, hot / 800);
 
-      // gravity drift: nodes pulled home, kicked by their own spikes
-      if (nodePositions && gravVel) {
-        let moved = false;
-        for (let i = 0; i < nodeCount; i++) {
-          const a = i < shown ? act[i] : -1;
-          if (a > 0.85 && Math.random() < 0.25) {
-            gravVel[i * 3] += (Math.random() - 0.5) * 0.6;
-            gravVel[i * 3 + 1] += (Math.random() - 0.5) * 0.6;
-            gravVel[i * 3 + 2] += (Math.random() - 0.5) * 0.4;
-          }
-          // spring to home + damping
-          for (let d = 0; d < 3; d++) {
-            const k = i * 3 + d;
-            gravVel[k] += -gravOff[k] * 3.2 * dt - gravVel[k] * 2.4 * dt;
-            gravOff[k] += gravVel[k] * dt;
-            if (Math.abs(gravOff[k]) > 0.02 || gravVel[k] !== 0) moved = true;
-          }
-          if (moved && i === nodeCount - 1) {
-            const pa = nodeGeo.getAttribute("position") as THREE.BufferAttribute;
-            const pa2 = pa.array as Float32Array;
-            for (let q = 0; q < nodeCount * 3; q++) pa2[q] = nodePositions[q] + gravOff[q];
-            pa.needsUpdate = true;
-          }
-        }
-        if (moved) {
-          const pa = nodeGeo.getAttribute("position") as THREE.BufferAttribute;
-          const pa2 = pa.array as Float32Array;
-          for (let q = 0; q < nodeCount * 3; q++) pa2[q] = nodePositions[q] + gravOff[q];
-          pa.needsUpdate = true;
-        }
-      }
-
       const somaAttr = somaGeo.getAttribute("aAct") as THREE.BufferAttribute;
       const sArr = somaAttr.array as Float32Array;
       for (let s = 0; s < somaMeta.length; s++) {
@@ -626,7 +588,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
     let raf = 0;
     let alive = true;
     let last = performance.now();
-    let orbit = 0.6;
+    const orbit = 0.35; // fixed azimuth
     const driveState = { lastDrive: 0, lastPulseAt: 0 };
 
     // ---- canvas into the panel ----
@@ -662,7 +624,6 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
 
       updateDynamic(dt);
 
-      orbit += dt * ORBIT_SPEED;
       const ce = Math.cos(ELEVATION);
       camera.position.set(Math.sin(orbit) * camDist * ce, Math.sin(ELEVATION) * camDist, Math.cos(orbit) * camDist * ce);
       camera.lookAt(0, 0, 0);
