@@ -107,9 +107,9 @@ void main() {
   vec3 fire = mix(vec3(0.30, 0.95, 1.00), vec3(0.35, 1.00, 0.62), smoothstep(0.15, 0.50, a));
   fire = mix(fire, vec3(1.00, 0.72, 0.28), smoothstep(0.50, 0.85, a));
   fire = mix(fire, vec3(1.00, 0.97, 0.86), smoothstep(0.85, 1.25, a));
-  float w = smoothstep(0.10, 0.45, a);
-  vec3 col = mix(base, fire * 0.85, w);
-  float bright = 0.6 + smoothstep(0.1, 1.1, a) * 0.7;
+  float w = smoothstep(0.35, 0.85, a);
+  vec3 col = mix(base, fire * 0.8, w);
+  float bright = 0.55 + smoothstep(0.35, 1.1, a) * 0.75;
   gl_FragColor = vec4(col * disk * bright, disk);
 }
 `;

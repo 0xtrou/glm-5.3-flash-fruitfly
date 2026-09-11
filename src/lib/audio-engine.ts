@@ -95,10 +95,10 @@ class BrainPlayer {
       const on = this.corpus.onsets[ch].includes(cStep);
       if (on && this.rand() < 0.88) {
         const extra = this.rand() < 0.1 ? 14 : 0;
-        this.brain.stimulate(ch, 34 + ((this.rand() * 12) | 0) + extra, 1.1 + this.rand() * 0.12);
+        this.brain.stimulate(ch, 22 + ((this.rand() * 10) | 0) + extra, 0.95 + this.rand() * 0.1);
       } else if (!on && this.rand() < 0.045) {
         // spontaneous off-grid thought
-        this.brain.stimulate(ch, 10 + ((this.rand() * 10) | 0), 0.9);
+        this.brain.stimulate(ch, 8 + ((this.rand() * 8) | 0), 0.75);
       }
     }
     return this.brain.stepDetailed();

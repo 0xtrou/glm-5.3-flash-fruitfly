@@ -293,7 +293,7 @@ export class NeuralSim {
     if (this.loadProgress >= 1) {
       this.loadProgress = 1;
     }
-    const decay = Math.exp(-dt * 4.2);
+    const decay = Math.exp(-dt * 5.6);
     const act = this.act;
     const adj = this.adjacency;
     const off = this.offsets;
@@ -313,7 +313,7 @@ export class NeuralSim {
           if (this.region[i] === REGION_VNC) motorFires++;
           else centralFires++;
         }
-        act[i] = Math.min(1.6, a * decay);
+        act[i] = Math.min(1.1, a * decay);
       }
     }
     // EMA of firing rates — what the fly avatars express as movement
