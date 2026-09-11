@@ -13,7 +13,7 @@
  *   · LineSegments  — real parent→child cable edges, silver-blue @ low opacity
  *   · Points        — somata (root node of each reconstructed neuron), larger
  *   · Points        — traveling pulses riding pulseTarget() hops (additive)
- * Post: EffectComposer + RenderPass + UnrealBloomPass + OutputPass (the glow).
+ * Post: none — solid colors, no bloom/glow. Cells, cables, vibration via color.
  *
  * Per frame: sim.tick(dt) EXACTLY once (this loop owns the tick while alive),
  * aAct attribute upload, soma glow, pulse integration, slow Y orbit, bloom.
@@ -24,10 +24,6 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { audioEngine } from "@/lib/audio-engine";
 import { fx } from "@/components/game/scene";
 import { REGION_CX, REGION_OL, REGION_VNC, type NeuralSim } from "@/lib/neural-sim";
@@ -202,7 +198,6 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
     const common = {
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
     } as const;
 
     const nodeMat = new THREE.ShaderMaterial({
@@ -230,8 +225,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
     const lineMat = new THREE.LineBasicMaterial({
       color: 0x6f8fd0,
       transparent: true,
-      opacity: 0.3,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.5,
       depthWrite: false,
     });
 
@@ -252,11 +246,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
     group.add(lineObj, pointsObj, somaObj, pulseObj);
 
     // ---- postprocessing: bloom is what makes it read "living brain" ----
-    const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.3, 0.55);
-    composer.addPass(bloomPass);
-    composer.addPass(new OutputPass());
+
 
     // ---- per-dataset build state ----
     let builtKey = -1;
@@ -513,8 +503,8 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       const pr = Math.min(window.devicePixelRatio || 1, 1.5);
       renderer.setPixelRatio(pr);
       renderer.setSize(w, h, false);
-      composer.setPixelRatio(pr);
-      composer.setSize(w, h);
+      renderer.setPixelRatio(pr);
+      renderer.setSize(w, h);
       nodeMat.uniforms.uDpr.value = pr;
       somaMat.uniforms.uDpr.value = pr;
       pulseMat.uniforms.uDpr.value = pr;
@@ -566,7 +556,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       camera.position.set(Math.sin(orbit) * camDist * ce, Math.sin(ELEVATION) * camDist, Math.cos(orbit) * camDist * ce);
       camera.lookAt(0, 0, 0);
 
-      composer.render();
+      renderer.render(scene, camera);
     };
     raf = requestAnimationFrame(loop);
     onWebglRef.current?.(true);
@@ -576,7 +566,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       canvas.removeEventListener("webglcontextlost", onContextLost);
-      composer.dispose();
+      renderer.dispose();
       bloomPass.dispose();
       nodeGeo.dispose();
       somaGeo.dispose();
