@@ -1,5 +1,6 @@
 "use client";
 
+import { Brain, Bug, Volume2, VolumeX, Zap, Play, AudioLines } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useGame } from "@/lib/game-store";
@@ -28,7 +29,7 @@ export function Hud() {
 
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="border-emerald-400/50 bg-emerald-500/10 text-emerald-300">
-            🧠 BRAIN-GENERATED
+            BRAIN-GENERATED
           </Badge>
           <Button
             variant="outline"
@@ -40,7 +41,7 @@ export function Hud() {
             }}
             aria-label="Toggle sound"
           >
-            {muted ? "🔇" : "🔊"}
+            {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </Button>
         </div>
       </div>
@@ -49,19 +50,23 @@ export function Hud() {
       {phase === "idle" && (
         <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="mx-4 max-w-md rounded-2xl border border-white/10 bg-[#0d0d17]/95 p-8 text-center shadow-2xl">
-            <div className="text-5xl">🪰🎧🧠</div>
+            <div className="flex items-center justify-center gap-3">
+              <Bug className="h-10 w-10 text-red-400" />
+              <AudioLines className="h-10 w-10 text-fuchsia-400" />
+              <Brain className="h-10 w-10 text-violet-400" />
+            </div>
             <h3 className="mt-3 text-2xl font-black text-white">DJ FLYWIRE × MC JANELIA</h3>
             <p className="mt-1 text-sm font-semibold tracking-wider text-violet-300 uppercase">
               Two trained brains. Zero scripts. Live.
             </p>
             <div className="mt-4 space-y-1.5 text-left text-sm text-white/70">
-              <p>🧠 Every sound is a spike from their trained networks.</p>
+              <p><Brain className="mr-1.5 inline h-4 w-4 text-violet-400" /> Every sound is a spike from their trained networks.</p>
               <p>
-                🪰 Their bodies move with their <b className="text-white">actual brain activity</b> —
+                <Bug className="mr-1.5 inline h-4 w-4 text-red-400" /> Their bodies move with their <b className="text-white">actual brain activity</b> —
                 watch the CNS panels mirror the flies.
               </p>
               <p>
-                ⚡ When both motor populations synchronize, the{" "}
+                <Zap className="mr-1.5 inline h-4 w-4 text-amber-400" /> When both motor populations synchronize, the{" "}
                 <b className="text-white">drop</b> fires on its own.
               </p>
             </div>
@@ -73,7 +78,8 @@ export function Hud() {
                 start();
               }}
             >
-              ▶ START THE SET
+              START THE SET
+              <Play className="ml-1 h-4 w-4 fill-current" />
             </Button>
             <p className="mt-3 text-[11px] text-white/40">
               128 BPM carrier · R-STDP trained · 140,024-neuron model · click a name tag to poke a fly

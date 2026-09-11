@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useGame, statusFor } from "@/lib/game-store";
+import { AudioLines, Brain, Bug } from "lucide-react";
 import { audioEngine } from "@/lib/audio-engine";
 import { flywireSim, janeliaSim, bootNeuralSims } from "@/lib/neural-sim";import { NeuralPanel } from "./neural-panel";
 import { FaderPanel } from "./fader-panel";
@@ -12,7 +13,11 @@ const DjGame = dynamic(() => import("@/components/game/dj-game"), {
   loading: () => (
     <div className="flex h-full min-h-[420px] items-center justify-center bg-[#07070f]">
       <div className="animate-pulse text-center">
-        <div className="text-5xl">🪰</div>
+        <div className="flex items-center justify-center gap-3">
+          <Bug className="h-10 w-10 text-red-400" />
+          <AudioLines className="h-10 w-10 text-fuchsia-400" />
+          <Brain className="h-10 w-10 text-violet-400" />
+        </div>
         <p className="mt-3 font-mono text-sm font-bold tracking-widest text-emerald-300/50 uppercase">
           Waking 140,024 neurons…
         </p>

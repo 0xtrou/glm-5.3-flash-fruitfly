@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useGame } from "@/lib/game-store";
+import { Download } from "lucide-react";
 import { flywireSim, janeliaSim } from "@/lib/neural-sim";
 
 /**
@@ -96,10 +97,11 @@ export function FaderPanel() {
             a.click();
             URL.revokeObjectURL(a.href);
           }}
-          className="rounded border border-white/15 px-2 py-0.5 font-mono text-[10px] text-white/60 transition hover:border-white/40 hover:text-white"
+          className="flex items-center gap-1 rounded border border-white/15 px-2 py-0.5 font-mono text-[10px] text-white/60 transition hover:border-white/40 hover:text-white"
           aria-label="Export brain activity audit log"
         >
-          ⬇ audit log
+          <Download className="h-3 w-3" />
+          audit log
         </button>
         <span className="hidden text-[12px] text-slate-500 sm:inline">{detail}</span>
       </footer>
