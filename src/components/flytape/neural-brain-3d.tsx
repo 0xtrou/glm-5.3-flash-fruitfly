@@ -567,7 +567,6 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       ro.disconnect();
       canvas.removeEventListener("webglcontextlost", onContextLost);
       renderer.dispose();
-      bloomPass.dispose();
       nodeGeo.dispose();
       somaGeo.dispose();
       lineGeo.dispose();
