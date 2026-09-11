@@ -105,8 +105,9 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
 
   return (
     <section
-      className="flex h-52 min-h-0 shrink-0 flex-col overflow-hidden rounded-lg border bg-[#04100b] lg:h-auto lg:min-h-[150px] lg:shrink"
-      style={{ borderColor: `${accent}33` }}
+      ref={sectionRef}
+      className={`flex h-52 min-h-0 shrink-0 flex-col overflow-hidden rounded-lg border bg-[#04100b] lg:h-auto lg:min-h-[150px] lg:shrink ${isFs ? "fixed inset-0 z-50 h-dvh w-screen rounded-none border-0" : ""}`}
+      style={{ borderColor: isFs ? `${accent}88` : `${accent}33` }}
     >
       <header className="flex items-center justify-between border-b border-white/10 bg-[#071510] px-3 py-1.5">
         <h2 className="text-[11px] font-black tracking-[0.14em]" style={{ color: accent }}>
