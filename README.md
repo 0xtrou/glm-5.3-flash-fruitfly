@@ -20,6 +20,18 @@ every other node has a single parent, and no edge crosses a neuron boundary
 whole foundation. When a spike travels from node to parent node, it is
 moving along a neurite that an actual fly grew.
 
+All 70 neurons were re-verified against the NeuroMorpho API live: names,
+species, and archives match one-for-one. They are CATMAID reconstructions
+from the FIB-SEM whole-adult-brain electron-microscopy volume published as
+Zheng et al., Cell 2018 (doi 10.1016/j.cell.2018.06.019) — the same imaging
+volume the FlyWire project later segmented. Sample entry: `block_203840`,
+Bock archive, an adult GABAergic anterior paired lateral (APL) neuron of
+the mushroom body, Canton S strain. One caveat: every neuron in the bundle
+carries exactly 400 cable points, a uniform resample — the original EM
+traces hold more nodes, but NeuroMorpho's bulk file endpoints no longer
+serve that archive, so the full-resolution counts are browsable only on
+their site.
+
 The two files, `public/data/fly-neurons-wire.json` and
 `public/data/fly-neurons-janelia.json`, are disjoint neuron sets — two flies
 that share no anatomy. Whatever differences emerge between DJ FLYWIRE and
@@ -139,9 +151,12 @@ loop, calibration, pass gates, and how to extend the crate.
 ## Credits and license
 
 Neuron reconstructions via [NeuroMorpho.org](https://neuromorpho.org),
-archives of Bock, Williams, and Cirelli. Connectome figures referenced from
-the FlyWire 783 release (Schlegel et al., Nature 2024). Neuropil layout
-approximates the JRC2018 template space (Bogovic et al. 2020).
+archives of Bock (brain) and Williams (VNC) — all 70 IDs re-verified against
+the NeuroMorpho API. Source volume: Zheng et al., Cell 2018
+(doi 10.1016/j.cell.2018.06.019), the FIB-SEM whole-adult-brain EM dataset
+later segmented by FlyWire; connectome figures cited from the FlyWire 783
+release (Schlegel et al., Nature 2024). Neuropil layout approximates the
+JRC2018 template space (Bogovic et al. 2020).
 
 The whole thing — training loop, audio engine, 3D renders, this site — was
 built end to end with **GLM-5.3-Flash** (Z.ai) driving the **ZCode** agent
