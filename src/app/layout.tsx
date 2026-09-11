@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://fruitfly.solo.engineer"),
+  metadataBase: new URL("https://flytape.solo.engineer"),
   title: {
     default: "FLYTAPE — Two Trained Fly Brains Generating Live Music",
     template: "%s · FLYTAPE",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   authors: [{ name: "The Connectome Crew" }],
   openGraph: {
     type: "website",
-    url: "https://fruitfly.solo.engineer",
+    url: "https://flytape.solo.engineer",
     siteName: "FLYTAPE",
     title: "FLYTAPE — Two Trained Fly Brains Generating Live Music",
     description:

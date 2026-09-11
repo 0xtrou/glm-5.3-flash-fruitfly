@@ -126,7 +126,7 @@ export default function OpengraphImage() {
             display: "flex",
           }}
         >
-          fruitfly.solo.engineer
+          flytape.solo.engineer
         </div>
       </div>
     ),
