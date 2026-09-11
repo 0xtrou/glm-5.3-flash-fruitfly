@@ -135,5 +135,11 @@ archives of Bock, Williams, and Cirelli. Connectome figures referenced from
 the FlyWire 783 release (Schlegel et al., Nature 2024). Neuropil layout
 approximates the JRC2018 template space (Bogovic et al. 2020).
 
+The whole thing — training loop, audio engine, 3D renders, this site — was
+built end to end with **GLM-5.3-Flash** (Z.ai) driving the **ZCode** agent
+harness: it read the datasets, wrote the code, ran the training, diagnosed
+the failures (the seizure, the random spray, the buried motif), and shipped
+every deploy.
+
 Code under the [MIT license](LICENSE). The morphology bundles keep their
 CC BY 4.0 attribution — cite the source labs if you reuse them.
