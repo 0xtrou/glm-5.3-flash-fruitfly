@@ -7,6 +7,7 @@ import { AudioLines, Brain, Bug } from "lucide-react";
 import { audioEngine } from "@/lib/audio-engine";
 import { flywireSim, janeliaSim, bootNeuralSims } from "@/lib/neural-sim";import { NeuralPanel } from "./neural-panel";
 import { FaderPanel } from "./fader-panel";
+import { AuditLog } from "./audit-log";
 
 const DjGame = dynamic(() => import("@/components/game/dj-game"), {
   ssr: false,
@@ -103,8 +104,9 @@ export function FlytapeApp() {
 
       {/* main grid */}
       <div className="grid min-h-0 flex-1 gap-2 px-2 pb-1 lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_540px]">
-        {/* main panel — the live set */}
-        <section className="flex min-h-[480px] flex-col overflow-hidden rounded-lg border border-white/10 bg-[#04100b] lg:min-h-0">
+        {/* main column — the live set + audit stream */}
+        <div className="flex min-h-[480px] flex-col gap-2 lg:min-h-0">
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/10 bg-[#04100b]">
           <header className="flex shrink-0 items-center justify-between border-b border-white/10 bg-[#071510] px-3 py-2">
             <h2 className="text-[12px] font-black tracking-[0.14em] text-emerald-300">
               DECKS <span className="text-emerald-300/40">/</span> LIVE RHYTHM DEPLOYMENT
@@ -116,6 +118,8 @@ export function FlytapeApp() {
           </div>
           <StatusStrip />
         </section>
+          <AuditLog />
+        </div>
 
         {/* right column — two independent brains + fader input */}
         <div className="flex min-h-0 flex-col gap-2 lg:grid lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)_auto]">
