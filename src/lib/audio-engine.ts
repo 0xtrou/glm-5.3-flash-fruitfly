@@ -3,9 +3,14 @@ import {
   FLYWIRE_CORPUS,
   FLYWIRE_TRACK_B,
   FLYWIRE_TRACK_C,
+  FLYWIRE_TRACK_D,
+  FLYWIRE_TRACK_E,
   JANELIA_CORPUS,
   JANELIA_TRACK_B,
   JANELIA_TRACK_C,
+  JANELIA_TRACK_D,
+  JANELIA_TRACK_E,
+  JANELIA_TRACK_F,
   PENTATONIC,
 } from "./brain/corpus";
 import { DATA_VERSION, flywireSim, janeliaSim } from "./neural-sim";
@@ -33,7 +38,9 @@ function corpusPitchAt(corpus: typeof FLYWIRE_CORPUS, step: number, channel: num
       bestIdx = i;
     }
   }
-  return pit[bestIdx % pit.length] ?? 0;
+  const scale = corpus.scale ?? PENTATONIC;
+  const deg = pit[bestIdx % pit.length] ?? 0;
+  return scale[deg % scale.length] ?? 0;
 }
 
 interface BrainWeights {
@@ -104,6 +111,11 @@ class BrainPlayer {
   private improvSeed = 7;
   private boostFor = 1;
   private ambient = 900;
+
+  /** pitch for a channel-step on the track currently on the decks */
+  pitchFor(cStep: number, channel: number): number {
+    return corpusPitchAt(this.corpus, cStep, channel);
+  }
 
   private rand(): number {
     // xorshift — varies per call, gives each pass through the corpus a life of its own
@@ -178,8 +190,8 @@ class BrainModeController {
         fetch(`/data/weights-janelia.json?v=${DATA_VERSION}`).then((r) => r.json()),
       ]);
       this.players = {
-        wire: new BrainPlayer(w, [FLYWIRE_CORPUS, FLYWIRE_TRACK_B, FLYWIRE_TRACK_C], 11, 2.6, (w as { ambient?: number }).ambient ?? 900),
-        janelia: new BrainPlayer(j, [JANELIA_CORPUS, JANELIA_TRACK_B, JANELIA_TRACK_C], 47, 1.5, (j as { ambient?: number }).ambient ?? 900),
+        wire: new BrainPlayer(w, [FLYWIRE_CORPUS, FLYWIRE_TRACK_B, FLYWIRE_TRACK_C, FLYWIRE_TRACK_D, FLYWIRE_TRACK_E], 11, 2.6, (w as { ambient?: number }).ambient ?? 900),
+        janelia: new BrainPlayer(j, [JANELIA_CORPUS, JANELIA_TRACK_B, JANELIA_TRACK_C, JANELIA_TRACK_D, JANELIA_TRACK_E, JANELIA_TRACK_F], 47, 1.5, (j as { ambient?: number }).ambient ?? 900),
       };
       this.loaded = true;
     } finally {
@@ -321,9 +333,11 @@ class BrainModeController {
   }
 
   pitchFor(note: BrainNote, cStep: number): number {
-    const corpus = note.fly === "wire" ? FLYWIRE_CORPUS : JANELIA_CORPUS;
-    const deg = corpusPitchAt(corpus, cStep, note.channel);
-    return PENTATONIC[deg % PENTATONIC.length];
+    const player = note.fly === "wire" ? this.players?.wire : this.players?.janelia;
+    if (!player) return PENTATONIC[0];
+    const semi = player.pitchFor(cStep, note.channel);
+    // MC JANELIA is the melodic brain — her leads sit an octave up
+    return note.fly === "janelia" ? semi + 12 : semi;
   }
 }
 

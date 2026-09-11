@@ -7,7 +7,13 @@ export interface Corpus {
   onsets: number[][];
   /** pitches per channel per onset (scale degrees) — bass/lead channels only */
   pitches?: (number[] | undefined)[];
+  /** semitone lookup for pitch degrees; defaults to A-minor pentatonic.
+   *  Melodic corpora use the chromatic scale so real melodies survive. */
+  scale?: number[];
 }
+
+/** all twelve semitones — lets a corpus spell real melodies */
+export const CHROMATIC = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
 // A minor pentatonic degrees, low → high
 export const PENTATONIC = [0, 3, 5, 7, 10, 12, 15, 17];
@@ -97,4 +103,96 @@ export const JANELIA_TRACK_C: Corpus = {
     [2, 5, 9, 12, 18, 21, 25, 28],
   ],
   pitches: [undefined, undefined, undefined, [0, 3, 7, 10, 12, 10, 7, 5]],
+};
+
+// ---- the classical records (public domain compositions, our patterns) ----
+
+/** Beethoven, Für Elise (1810) — opening theme, A minor, register 12–24 */
+export const JANELIA_TRACK_D: Corpus = {
+  style: "für elise (A minor)",
+  channels: 4,
+  onsets: [
+    [0, 16], // ghost kick — downbeats
+    [8, 24], // ghost snare
+    [2, 6, 10, 14, 18, 22, 26, 30], // offbeat hats
+    [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28], // the theme
+  ],
+  pitches: [
+    undefined,
+    undefined,
+    undefined,
+    [7, 6, 7, 6, 7, 2, 5, 3, 0, 3, 7, 0, 2, 7, 11, 2, 3],
+  ],
+  scale: CHROMATIC,
+};
+
+/** Satie, Gymnopédie No. 1 (1888) — slow, floating, sparse */
+export const JANELIA_TRACK_E: Corpus = {
+  style: "gymnopédie (Satie)",
+  channels: 4,
+  onsets: [
+    [0, 16],
+    [12, 28],
+    [4, 20],
+    [0, 6, 12, 16, 22, 28],
+  ],
+  pitches: [
+    undefined,
+    undefined,
+    undefined,
+    [7, 4, 2, 0, 2, 7],
+  ],
+  scale: CHROMATIC,
+};
+
+/** Beethoven, Moonlight Sonata mvt. 1 (1801) — triplet arpeggio texture */
+export const FLYWIRE_TRACK_D: Corpus = {
+  style: "moonlight arpeggio",
+  channels: 4,
+  onsets: [
+    [0, 12, 16, 28], // deep slow kick
+    [8, 24], // soft snare
+    [2, 6, 10, 14, 18, 22, 26, 30], // triplet-feel hats
+    [0, 3, 6, 8, 11, 14, 16, 19, 22, 24, 27, 30], // rolling arpeggio
+  ],
+  pitches: [
+    undefined,
+    undefined,
+    undefined,
+    [4, 11, 7, 4, 11, 7, 0, 7, 4, 2, 9, 6],
+  ],
+  scale: CHROMATIC,
+};
+
+/** Satie-adjacent slow groove for the rhythm brain */
+export const FLYWIRE_TRACK_E: Corpus = {
+  style: "gymnopédie pulse",
+  channels: 4,
+  onsets: [
+    [0, 16],
+    [],
+    [4, 12, 20, 28],
+    [0, 6, 16, 22],
+  ],
+  pitches: [undefined, undefined, undefined, [0, 7, 4, 11]],
+  scale: CHROMATIC,
+};
+
+/** ORIGINAL composition (no external melody) — emotional arpeggio ballad in
+ *  the style of romantic piano pieces; A-minor pent, register 12–24 */
+export const JANELIA_TRACK_F: Corpus = {
+  style: "river of lights (original)",
+  channels: 4,
+  onsets: [
+    [0, 16],
+    [8, 24],
+    [2, 10, 18, 26],
+    [0, 2, 4, 7, 9, 11, 14, 16, 18, 20, 23, 25, 27, 30],
+  ],
+  pitches: [
+    undefined,
+    undefined,
+    undefined,
+    [0, 3, 7, 12, 10, 7, 3, 0, 10, 3, 7, 12, 10, 7],
+  ],
 };
