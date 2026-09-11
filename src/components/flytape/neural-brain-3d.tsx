@@ -101,15 +101,16 @@ void main() {
   if (disk < 0.01) discard;
   vec3 hue = hue2rgb(vHue);
   float a = max(vAct, 0.0);
-  // LIVE ONLY: visible while — and only while — spiking; cables carry structure
-  float flash = smoothstep(0.22, 0.9, a) * (0.35 + a * 0.65);
-  if (flash < 0.03) discard;
-  float w = smoothstep(0.15, 0.40, a);
+  // default: node carries its neuron's color, solid and calm
+  vec3 base = hue * 0.6 + 0.16;
+  // active: same node gets brighter — color lifts toward the fire ramp
   vec3 fire = mix(vec3(0.30, 0.95, 1.00), vec3(0.35, 1.00, 0.62), smoothstep(0.15, 0.50, a));
   fire = mix(fire, vec3(1.00, 0.72, 0.28), smoothstep(0.50, 0.85, a));
   fire = mix(fire, vec3(1.00, 0.97, 0.86), smoothstep(0.85, 1.25, a));
-  vec3 col = mix(hue * 0.4 + 0.15, fire * (0.55 + a * 0.32), w);
-  gl_FragColor = vec4(col * disk * flash, disk * flash);
+  float w = smoothstep(0.10, 0.45, a);
+  vec3 col = mix(base, fire * 0.85, w);
+  float bright = 0.6 + smoothstep(0.1, 1.1, a) * 0.7;
+  gl_FragColor = vec4(col * disk * bright, disk);
 }
 `;
 
