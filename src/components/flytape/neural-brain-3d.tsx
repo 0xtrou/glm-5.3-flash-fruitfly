@@ -581,7 +581,7 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerup", onUp);
     canvas.addEventListener("pointercancel", onUp);
-    canvas.style.touchAction = "none"; // drag works on touch screens too
+    canvas.style.touchAction = "pan-y"; // horizontal drag orbits, vertical swipe scrolls the page (mobile)
     const removeNav = () => {
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("pointerdown", onDown);
