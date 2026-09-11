@@ -133,7 +133,7 @@ export function NeuralPanel({ sim, title, accent, drive, fly }: Props) {
       </header>
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        {mounted && <NeuralBrain3D sim={sim} accent={accent} drive={drive} onWebgl={handleWebgl} />}
+        {mounted && <NeuralBrain3D sim={sim} accent={accent} drive={drive} fly={fly} onWebgl={handleWebgl} />}
         {webglFailed && (
           <div
             className="absolute inset-0"

@@ -34,6 +34,8 @@ interface Props {
   accent: string;
   /** which audio transient drives this brain when the WebGL loop is not running */
   drive: "kick" | "treble";
+  /** which trained brain's real firings light the nodes (utilization) */
+  fly: "wire" | "janelia";
   /** true once rendering; false when WebGL init failed or the context was lost */
   onWebgl?: (alive: boolean) => void;
 }
@@ -172,10 +174,14 @@ void main() {
 }
 `;
 
-export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
+export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onWebglRef = useRef(onWebgl);
   onWebglRef.current = onWebgl;
+  // the effect's render loop reads the LIVE brain each frame — keep it in a
+  // ref so a replaced weights instance is picked up without a scene rebuild
+  const flyRef = useRef(fly);
+  flyRef.current = fly;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -465,15 +471,33 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       (pulseGeo.getAttribute("aAlpha") as THREE.BufferAttribute).needsUpdate = true;
     };
 
-    // ---- dynamic pass: sim.act -> aAct, soma glow, line reactivity ----
+    // ---- dynamic pass: sim.act + TRAINED brain firings -> aAct, soma glow ----
+    // The panel's %util reads the trained network's real node firings — the
+    // animation must show the same thing. Node indices match 1:1 (both walk
+    // the morphology bundle in order). Two visual components per node:
+    //   fresh spike (≤24 substeps)  → bright bloom, the rhythm you can see
+    //   fired this util window (≤512) → sustained lift, the %util you can count
+    const FRESH = 24; // substeps of bright bloom after a spike (~375ms @ 96 BPM)
+    const UTIL_WINDOW = 512; // same window the %util metric counts
+    const UTIL_LIFT = 0.3; // sustained brightness of a recently-fired node
     const updateDynamic = (dt: number) => {
       const shown = sim.revealedCount();
       const act = sim.act;
       const actAttr = nodeGeo.getAttribute("aAct") as THREE.BufferAttribute;
       const arr = actAttr.array as Float32Array;
+      const brain = audioEngine.brains.brainOf(flyRef.current);
+      const lastFire = brain?.lastFire;
+      const tSub = brain?.clock ?? 0;
       let hot = 0;
       for (let i = 0; i < nodeCount; i++) {
-        const v = i < shown ? act[i] : -1;
+        let v = i < shown ? act[i] : -1;
+        if (lastFire && i < nodeCount) {
+          const since = tSub - lastFire[i];
+          if (since >= 0 && since < UTIL_WINDOW) {
+            const bloom = since < FRESH ? (1 - since / FRESH) * 1.3 : 0;
+            v = Math.max(v, bloom, UTIL_LIFT);
+          }
+        }
         arr[i] = v;
         if (v > 0.15) hot++;
       }

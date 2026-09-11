@@ -253,6 +253,12 @@ class BrainModeController {
     return this.drive[fly];
   }
 
+  /** the live trained brain of a fly — the 3D visual reads its real
+   *  per-node lastFire timestamps to render utilization */
+  brainOf(fly: "wire" | "janelia"): LIFBrain | null {
+    return this.players?.[fly].brain ?? null;
+  }
+
   /** raw unsmoothed spike output of the most recent 16th, with a step index
    *  so consumers can detect brain events (new idx = brain just stepped) */
   spikesNow(): {
