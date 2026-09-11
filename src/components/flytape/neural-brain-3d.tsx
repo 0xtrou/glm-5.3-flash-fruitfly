@@ -27,6 +27,7 @@ import * as THREE from "three";
 import { audioEngine } from "@/lib/audio-engine";
 import { fx } from "@/components/game/scene";
 import { REGION_CX, REGION_OL, REGION_VNC, type NeuralSim } from "@/lib/neural-sim";
+import { NEUROPHILS } from "@/lib/brain/atlas";
 
 interface Props {
   sim: NeuralSim;
@@ -195,6 +196,32 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
     const group = new THREE.Group();
     scene.add(group);
 
+    let gravOff = new Float32Array(0);
+    let gravVel = new Float32Array(0);
+    const neuropilGeos: THREE.BufferGeometry[] = [];
+    const neuropilObjs: THREE.Object3D[] = [];
+    let globeShell: THREE.Mesh | null = null;
+    const globeRings: THREE.Object3D[] = [];
+
+    // cosmic backdrop: starfield outside the globe
+    {
+      const starCount = 500;
+      const sp = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount; i++) {
+        const th = Math.random() * Math.PI * 2;
+        const ph = Math.acos(2 * Math.random() - 1);
+        const r = 30 + Math.random() * 40;
+        sp[i * 3] = r * Math.sin(ph) * Math.cos(th);
+        sp[i * 3 + 1] = r * Math.cos(ph);
+        sp[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(sp, 3));
+      const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x8fa8d8, size: 0.35, transparent: true, opacity: 0.55, sizeAttenuation: true }));
+      stars.frustumCulled = false;
+      scene.add(stars);
+    }
+
     const common = {
       transparent: true,
       depthWrite: false,
@@ -339,6 +366,8 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       }
       nodePositions = positions;
       nodeCount = n;
+      gravOff = new Float32Array(n * 3);
+      gravVel = new Float32Array(n * 3);
 
       nodeGeo.dispose();
       nodeGeo = new THREE.BufferGeometry();
@@ -373,6 +402,32 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       }
       lineObj.geometry = lineGeo;
 
+      // neuropil wireframes — translucent ellipsoids at atlas positions
+      for (const g of neuropilGeos) g.dispose();
+      neuropilGeos.length = 0;
+      for (const np of NEUROPHILS) {
+        const seg = 36;
+        const pts1: THREE.Vector3[] = [];
+        const pts2: THREE.Vector3[] = [];
+        for (let i = 0; i <= seg; i++) {
+          const a = (i / seg) * Math.PI * 2;
+          pts1.push(new THREE.Vector3(Math.cos(a) * np.rx, Math.sin(a) * np.ry, 0));
+          pts2.push(new THREE.Vector3(0, Math.sin(a) * np.ry, Math.cos(a) * np.rz));
+        }
+        const g1 = new THREE.BufferGeometry().setFromPoints(
+          pts1.map((v) => new THREE.Vector3((np.cx - cx) * S + v.x * S, (cy - np.cy) * S + v.y * S, (np.cz - cz) * S + v.z * S * DEPTH_SCALE))
+        );
+        const g2 = new THREE.BufferGeometry().setFromPoints(
+          pts2.map((v) => new THREE.Vector3((np.cx - cx) * S + v.x * S, (cy - np.cy) * S + v.y * S, (np.cz - cz) * S + v.z * S * DEPTH_SCALE))
+        );
+        const lm = new THREE.LineBasicMaterial({ color: 0x4a6ab8, transparent: true, opacity: 0.16, depthWrite: false });
+        const l1 = new THREE.Line(g1, lm);
+        const l2 = new THREE.Line(g2, lm);
+        neuropilGeos.push(g1, g2);
+        group.add(l1, l2);
+        neuropilObjs.push(l1, l2);
+      }
+
       // somata — root node of each reconstructed neuron, slightly larger
       somaGeo.dispose();
       somaMeta = [];
@@ -397,6 +452,30 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       somaObj.geometry = somaGeo;
 
       radius = 0.5 * Math.hypot(ex1 - ex0, ey1 - ey0, ez1 - ez0) || 1;
+      // globe shell: translucent atmosphere + meridian rings, scaled to the brain
+      if (!globeShell) {
+        globeShell = new THREE.Mesh(
+          new THREE.SphereGeometry(1, 48, 32),
+          new THREE.MeshBasicMaterial({ color: 0x1a3a6e, transparent: true, opacity: 0.05, side: THREE.BackSide, depthWrite: false })
+        );
+        const ringPts: THREE.Vector3[] = [];
+        for (let i = 0; i <= 96; i++) {
+          const a = (i / 96) * Math.PI * 2;
+          ringPts.push(new THREE.Vector3(Math.cos(a), Math.sin(a), 0));
+        }
+        const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
+        for (let i = 0; i < 3; i++) {
+          const ring = new THREE.Line(ringGeo, new THREE.LineBasicMaterial({ color: 0x4a6ab8, transparent: true, opacity: 0.1, depthWrite: false }));
+          ring.rotation.x = (i * Math.PI) / 3;
+          globeRings.push(ring);
+          scene.add(ring);
+        }
+        globeShell.frustumCulled = false;
+        scene.add(globeShell);
+      }
+      const gr = radius * 1.45;
+      globeShell.scale.setScalar(gr);
+      for (const ring of globeRings) ring.scale.setScalar(gr);
       fitCamera();
     };
 
@@ -479,6 +558,38 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       actAttr.needsUpdate = true;
       // cables breathe with population firing
       lineMat.opacity = 0.24 + 0.1 * Math.min(1, hot / 800);
+
+      // gravity drift: nodes pulled home, kicked by their own spikes
+      if (nodePositions && gravVel) {
+        let moved = false;
+        for (let i = 0; i < nodeCount; i++) {
+          const a = i < shown ? act[i] : -1;
+          if (a > 0.85 && Math.random() < 0.25) {
+            gravVel[i * 3] += (Math.random() - 0.5) * 0.6;
+            gravVel[i * 3 + 1] += (Math.random() - 0.5) * 0.6;
+            gravVel[i * 3 + 2] += (Math.random() - 0.5) * 0.4;
+          }
+          // spring to home + damping
+          for (let d = 0; d < 3; d++) {
+            const k = i * 3 + d;
+            gravVel[k] += -gravOff[k] * 3.2 * dt - gravVel[k] * 2.4 * dt;
+            gravOff[k] += gravVel[k] * dt;
+            if (Math.abs(gravOff[k]) > 0.02 || gravVel[k] !== 0) moved = true;
+          }
+          if (moved && i === nodeCount - 1) {
+            const pa = nodeGeo.getAttribute("position") as THREE.BufferAttribute;
+            const pa2 = pa.array as Float32Array;
+            for (let q = 0; q < nodeCount * 3; q++) pa2[q] = nodePositions[q] + gravOff[q];
+            pa.needsUpdate = true;
+          }
+        }
+        if (moved) {
+          const pa = nodeGeo.getAttribute("position") as THREE.BufferAttribute;
+          const pa2 = pa.array as Float32Array;
+          for (let q = 0; q < nodeCount * 3; q++) pa2[q] = nodePositions[q] + gravOff[q];
+          pa.needsUpdate = true;
+        }
+      }
 
       const somaAttr = somaGeo.getAttribute("aAct") as THREE.BufferAttribute;
       const sArr = somaAttr.array as Float32Array;
