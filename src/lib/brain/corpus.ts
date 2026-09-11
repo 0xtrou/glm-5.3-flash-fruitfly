@@ -47,3 +47,54 @@ export const JANELIA_CORPUS: Corpus = {
 };
 
 export const CHANNEL_STYLES = ["kick", "snare", "hat", "melodic"];
+
+
+// ---- extra tracks: the DJs switch records mid-set ----
+
+export const FLYWIRE_TRACK_B: Corpus = {
+  style: "hard techno",
+  channels: 4,
+  onsets: [
+    [0, 4, 8, 12, 16, 20, 24, 28],
+    [4, 12, 20, 28],
+    [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30],
+    [2, 6, 10, 14, 18, 22, 26, 30],
+  ],
+  pitches: [undefined, undefined, undefined, [0, 0, 3, 5, 3, 0, 7, 5]],
+};
+
+export const FLYWIRE_TRACK_C: Corpus = {
+  style: "deep 4/4",
+  channels: 4,
+  onsets: [
+    [0, 8, 16, 24],
+    [8, 24],
+    [2, 6, 10, 14, 18, 22, 26, 30],
+    [0, 5, 8, 13, 16, 21, 24, 29],
+  ],
+  pitches: [undefined, undefined, undefined, [0, 5, 3, 3, 7, 5, 0, 0]],
+};
+
+export const JANELIA_TRACK_B: Corpus = {
+  style: "jungle breaks",
+  channels: 4,
+  onsets: [
+    [0, 10, 16, 26],
+    [4, 12, 20, 28],
+    [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30],
+    [0, 6, 10, 16, 22, 26],
+  ],
+  pitches: [undefined, undefined, undefined, [7, 5, 10, 7, 12, 10, 7, 5]],
+};
+
+export const JANELIA_TRACK_C: Corpus = {
+  style: "melodic dub",
+  channels: 4,
+  onsets: [
+    [0, 6, 16, 22],
+    [8, 24],
+    [4, 12, 20, 28],
+    [2, 5, 9, 12, 18, 21, 25, 28],
+  ],
+  pitches: [undefined, undefined, undefined, [0, 3, 7, 10, 12, 10, 7, 5]],
+};

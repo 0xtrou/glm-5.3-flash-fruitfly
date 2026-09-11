@@ -1,5 +1,13 @@
 import { LIFBrain } from "./brain/core";
-import { FLYWIRE_CORPUS, JANELIA_CORPUS, PENTATONIC } from "./brain/corpus";
+import {
+  FLYWIRE_CORPUS,
+  FLYWIRE_TRACK_B,
+  FLYWIRE_TRACK_C,
+  JANELIA_CORPUS,
+  JANELIA_TRACK_B,
+  JANELIA_TRACK_C,
+  PENTATONIC,
+} from "./brain/corpus";
 import { DATA_VERSION, flywireSim, janeliaSim } from "./neural-sim";
 
 export type Lane = 0 | 1 | 2 | 3; // kept for API compat
@@ -50,10 +58,22 @@ export interface BrainNote {
 class BrainPlayer {
   brain: LIFBrain;
   private corpus: typeof FLYWIRE_CORPUS;
+  private tracks: (typeof FLYWIRE_CORPUS)[];
+  trackIdx = 0;
 
-  constructor(weights: BrainWeights, corpus: typeof FLYWIRE_CORPUS, seed: number, boost = 1) {
+  setTrack(idx: number) {
+    this.trackIdx = idx % this.tracks.length;
+    this.corpus = this.tracks[this.trackIdx];
+  }
+
+  get trackStyle(): string {
+    return this.corpus.style;
+  }
+
+  constructor(weights: BrainWeights, tracks: (typeof FLYWIRE_CORPUS)[], seed: number, boost = 1) {
     this.boostFor = boost;
-    this.corpus = corpus;
+    this.tracks = tracks;
+    this.corpus = tracks[0];
     this.brain = new LIFBrain(
       { points: new Array(weights.n).fill(0) as [number, number, number][], edges: [], neuronCount: weights.n },
       { seed, inputGroups: weights.inputGroups, motorGroups: weights.motorGroups }
@@ -96,10 +116,10 @@ class BrainPlayer {
     for (let ch = 0; ch < this.corpus.channels; ch++) {
       const on = this.corpus.onsets[ch].includes(cStep);
       const boost = this.boostFor;
-      if (on && this.rand() < 0.94) {
+      if (on && this.rand() < 0.97) {
         const extra = this.rand() < 0.1 ? 14 : 0;
         this.brain.stimulate(ch, Math.round((38 + ((this.rand() * 12) | 0) + extra) * boost), (1.12 + this.rand() * 0.1) * Math.min(1.15, boost));
-      } else if (!on && this.rand() < 0.05) {
+      } else if (!on && this.rand() < 0.12) {
         // spontaneous off-grid thought
         this.brain.stimulate(ch, 12 + ((this.rand() * 10) | 0), 0.85);
       }
@@ -139,8 +159,8 @@ class BrainModeController {
         fetch(`/data/weights-janelia.json?v=${DATA_VERSION}`).then((r) => r.json()),
       ]);
       this.players = {
-        wire: new BrainPlayer(w, FLYWIRE_CORPUS, 11, 1.8),
-        janelia: new BrainPlayer(j, JANELIA_CORPUS, 47, 1.25),
+        wire: new BrainPlayer(w, [FLYWIRE_CORPUS, FLYWIRE_TRACK_B, FLYWIRE_TRACK_C], 11, 2.6),
+        janelia: new BrainPlayer(j, [JANELIA_CORPUS, JANELIA_TRACK_B, JANELIA_TRACK_C], 47, 1.5),
       };
       this.loaded = true;
     } finally {
@@ -228,6 +248,13 @@ class BrainModeController {
     //  joint activity is). ≥ ~20 spikes each → full synchrony.
     const joint = Math.min(a, b);
     return Math.min(1, joint / 25);
+  }
+
+  switchTrack(): { wire: string; janelia: string } | null {
+    if (!this.players) return null;
+    this.players.wire.setTrack((this.players.wire.trackIdx + 1) % 3);
+    this.players.janelia.setTrack((this.players.janelia.trackIdx + 1) % 3);
+    return { wire: this.players.wire.trackStyle, janelia: this.players.janelia.trackStyle };
   }
 
   noteSync() {
@@ -389,6 +416,14 @@ class AudioEngine {
       this.visualEvents.push({ time: t, type: "bar" });
       // brains decide the drop: synchrony between both motor populations
       if (bar >= 4 && !this.pendingDrop && this.brains.ready) {
+        // track switching: every 16 bars the DJs change records
+        if (bar % 16 === 0 && s === 0 && bar > 0) {
+          const t = this.brains.switchTrack();
+          if (t) {
+            flywireSim.auditEvent(`TRACK SWITCH → "${t.wire}"`);
+            janeliaSim.auditEvent(`TRACK SWITCH → "${t.janelia}"`);
+          }
+        }
         const counts = this.brains.lastBarSpikeCounts();
         const sync = this.brains.synchrony();
         const note = `bar ${bar}: ${counts.wire}+${counts.janelia} motor spikes, sync ${sync.toFixed(2)}`;
