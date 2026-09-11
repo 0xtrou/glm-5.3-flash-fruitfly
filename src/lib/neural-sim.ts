@@ -60,6 +60,10 @@ export class NeuralSim {
   private revealed = 9000;
   /** undirected cable pairs from the real reconstructions — drawn as skeletons */
   edgeList: Uint32Array | null = null;
+  /** total synapse degree per node — thick trunks vs thin branches */
+  deg: Uint32Array = new Uint32Array(0);
+  /** per-neuron {start, count} into the node arrays — root node = soma */
+  neuronRanges: { start: number; count: number; region: "brain" | "vnc" }[] = [];
 
   private datasetUrl: string;
 
@@ -119,6 +123,18 @@ export class NeuralSim {
     this.buildCSR(pairs);
   }
 
+  /** random neighbor along a real cable — pulses travel these */
+  pulseTarget(i: number): number {
+    const from = this.offsets[i];
+    const to = this.offsets[i + 1];
+    if (to <= from) return i;
+    return this.adjacency[from + ((Math.random() * (to - from)) | 0)];
+  }
+
+  degree(i: number): number {
+    return this.offsets[i + 1] - this.offsets[i];
+  }
+
   private buildCSR(pairs: number[]) {
     let maxId = 0;
     for (let k = 1; k < pairs.length; k += 2) if (pairs[k] > maxId) maxId = pairs[k];
@@ -134,6 +150,13 @@ export class NeuralSim {
     }
     this.offsets = counts;
     this.adjacency = targets;
+    // node degree (out + in) — trunk vs branch rendering
+    const deg = new Uint32Array(this.count);
+    for (let k = 0; k < pairs.length; k += 2) {
+      deg[pairs[k]]++;
+      deg[pairs[k + 1]]++;
+    }
+    this.deg = deg;
   }
 
   /** Fetch this fly's real morphologies and swap the atlas out from under the panel. */
@@ -172,6 +195,14 @@ export class NeuralSim {
         undirected.push(a, b);
       }
       this.edgeList = new Uint32Array(undirected);
+      this.neuronRanges = [];
+      {
+        let c = 0;
+        for (const neu of data.neurons) {
+          this.neuronRanges.push({ start: c, count: neu.count, region: neu.region });
+          c += neu.count;
+        }
+      }
       // modeled inter-neuron synapses: 6% of brain nodes project downstream
       const brainNodes = pools[REGION_OL].concat(pools[REGION_CX]);
       for (let i = 0; i < brainNodes.length; i++) {
