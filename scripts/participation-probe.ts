@@ -52,6 +52,4 @@ console.log("bar participation (64 substeps):", (brain.participation(64) * 100).
 console.log("4-bar participation (256):", (brain.participation(256) * 100).toFixed(1) + "%");
 
 // where do ambient hits land? sample
-const sample: number[] = [];
-for (let k = 0; k < 5; k++) sample.push((brain.rand() * brain.n) | 0);
-console.log("rand samples:", sample.join(","));
+
