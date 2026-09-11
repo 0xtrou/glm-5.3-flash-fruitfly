@@ -354,13 +354,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
         if (Y > ey1) ey1 = Y;
         if (Z < ez0) ez0 = Z;
         if (Z > ez1) ez1 = Z;
-        aHue[i] = hasHue
-          ? sim.nodeHue[i]
-          : sim.region[i] === REGION_VNC
-            ? 0.09
-            : sim.region[i] === REGION_CX
-              ? 0.38
-              : 0.58;
+        aHue[i] = hasHue ? sim.nodeHue[i] : 0.5;
         aDeg[i] = deg.length === n ? Math.min(1, deg[i] / 16) : 0.25;
         aAct[i] = i < shown ? sim.act[i] : -1;
       }
@@ -402,9 +396,14 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       }
       lineObj.geometry = lineGeo;
 
-      // neuropil wireframes — translucent ellipsoids at atlas positions
+      // neuropil wireframes — each brain AREA gets its own color
       for (const g of neuropilGeos) g.dispose();
       neuropilGeos.length = 0;
+      for (const obj of neuropilObjs) {
+        group.remove(obj);
+      }
+      neuropilObjs.length = 0;
+      let npIdx = 0;
       for (const np of NEUROPHILS) {
         const seg = 36;
         const pts1: THREE.Vector3[] = [];
@@ -415,8 +414,17 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
         const g1 = new THREE.BufferGeometry().setFromPoints(
           pts1.map((v) => new THREE.Vector3((np.cx - cx) * S + v.x * S, (cy - np.cy) * S + v.y * S, (np.cz - cz) * S + v.z * S * DEPTH_SCALE))
         );
-        const lm = new THREE.LineBasicMaterial({ color: 0x4a6ab8, transparent: true, opacity: 0.08, depthWrite: false });
-        const l1 = new THREE.Line(g1, lm);
+        const hue = (npIdx * 0.618) % 1;
+        const l1 = new THREE.Line(
+          g1,
+          new THREE.LineBasicMaterial({
+            color: new THREE.Color().setHSL(hue, 0.65, 0.55),
+            transparent: true,
+            opacity: 0.3,
+            depthWrite: false,
+          })
+        );
+        npIdx++;
         neuropilGeos.push(g1);
         group.add(l1);
         neuropilObjs.push(l1);
@@ -588,13 +596,55 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
     let raf = 0;
     let alive = true;
     let last = performance.now();
-    const orbit = 0.35; // fixed azimuth
+    // interactive camera — drag to orbit, wheel to zoom (user-navigable)
+    let orbit = 0.35;
+    let elev = ELEVATION;
+    let userZoom = 1;
     const driveState = { lastDrive: 0, lastPulseAt: 0 };
 
     // ---- canvas into the panel ----
     const canvas = renderer.domElement;
     canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
     container.appendChild(canvas);
+
+    // ---- navigation: wheel zoom + drag orbit ----
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    const onWheel = (ev: WheelEvent) => {
+      ev.preventDefault();
+      userZoom = Math.min(4, Math.max(0.35, userZoom * (1 + ev.deltaY * 0.0011)));
+    };
+    const onDown = (ev: PointerEvent) => {
+      dragging = true;
+      lastX = ev.clientX;
+      lastY = ev.clientY;
+      canvas.setPointerCapture(ev.pointerId);
+    };
+    const onMove = (ev: PointerEvent) => {
+      if (!dragging) return;
+      orbit -= (ev.clientX - lastX) * 0.005;
+      elev = Math.min(1.35, Math.max(-0.5, elev + (ev.clientY - lastY) * 0.004));
+      lastX = ev.clientX;
+      lastY = ev.clientY;
+    };
+    const onUp = (ev: PointerEvent) => {
+      dragging = false;
+      canvas.releasePointerCapture?.(ev.pointerId);
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("pointerdown", onDown);
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerup", onUp);
+    canvas.addEventListener("pointercancel", onUp);
+    canvas.style.touchAction = "none"; // drag works on touch screens too
+    const removeNav = () => {
+      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointercancel", onUp);
+    };
 
     const onContextLost = (ev: Event) => {
       ev.preventDefault();
@@ -624,8 +674,8 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
 
       updateDynamic(dt);
 
-      const ce = Math.cos(ELEVATION);
-      camera.position.set(Math.sin(orbit) * camDist * ce, Math.sin(ELEVATION) * camDist, Math.cos(orbit) * camDist * ce);
+      const ce = Math.cos(elev);
+      camera.position.set(Math.sin(orbit) * camDist * userZoom * ce, Math.sin(elev) * camDist * userZoom, Math.cos(orbit) * camDist * userZoom * ce);
       camera.lookAt(0, 0, 0);
 
       renderer.render(scene, camera);
@@ -638,6 +688,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       canvas.removeEventListener("webglcontextlost", onContextLost);
+      removeNav();
       renderer.dispose();
       nodeGeo.dispose();
       somaGeo.dispose();
