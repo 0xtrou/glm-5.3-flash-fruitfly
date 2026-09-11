@@ -194,3 +194,24 @@
 .fade-up {
   animation: fade-up 0.5s ease-out both;
 }
+/* TikTok-style floating reward icons */
+@keyframes reward-float {
+  0% {
+    transform: translateY(0) scale(0.5);
+    opacity: 0;
+  }
+  12% {
+    transform: translateY(-14px) scale(1.15);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-190px) translateX(var(--drift, 0px)) scale(0.8) rotate(12deg);
+    opacity: 0;
+  }
+}
+.animate-reward-float {
+  animation: reward-float 2.4s cubic-bezier(0.25, 0.6, 0.4, 1) forwards;
+}

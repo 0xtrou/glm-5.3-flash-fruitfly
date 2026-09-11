@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { StageScene } from "./scene";
 import { Hud } from "./hud";
+import { StageRewards } from "@/components/flytape/stage-rewards";
 
 export default function DjGame() {
   // never touch WebGL from the server — a WebGL rejection there kills the node process
@@ -28,6 +29,7 @@ export default function DjGame() {
         </div>
       )}
       <Hud />
+      <StageRewards />
     </div>
   );
 }
