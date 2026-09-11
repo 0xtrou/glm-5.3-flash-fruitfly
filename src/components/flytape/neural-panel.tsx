@@ -52,17 +52,16 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
     let lastTs = performance.now();
     let lastBass = 0;
     let lastKickAt = 0;
+    let buildKey = "";
+    let fiberPath: Path2D | null = null; // smooth curved neurites, all neurons
+    let haloPath: Path2D | null = null;
+    let webPath: Path2D | null = null; // inter-neuron synapse web
+    let tissueCanvas: HTMLCanvasElement | null = null;
+    let tissueKey = "";
     let lastDrive = 0;
     let lastPulseAt = 0;
-    let skeletonKey = "";
-    let trunkPath: Path2D | null = null;
-    let branchPath: Path2D | null = null;
-    let haloPath: Path2D | null = null;
-    let huePathsStore: Path2D[] | null = null;
-    let tissueCanvas: HTMLCanvasElement | null = null;
-    let tissueKeyRef = "";
 
-    // pre-rendered glow sprites — radial gradients are too slow per-node
+    const refs = { buildKey: "", tissueKey: "" };
     const makeSprite = (r: number, g: number, b: number) => {
       const c = document.createElement("canvas");
       c.width = c.height = 32;
@@ -80,15 +79,14 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
     const spriteHot = makeSprite(255, 241, 210);
     const spriteCyan = makeSprite(103, 232, 249);
 
-    // traveling pulses — ride real cable edges (a → b, t ∈ [0,1))
-    const pulses: { a: number; b: number; t: number; speed: number; hops: number; hue: 0 | 1 }[] = [];
+    // traveling pulses on real cables
+    const pulses: { a: number; b: number; t: number; speed: number; hops: number }[] = [];
 
     const draw = () => {
       const now = performance.now();
       const dt = Math.min(0.05, (now - lastTs) / 1000);
       lastTs = now;
-      // the CNS ticks on its own clock — independent of the WebGL scene
-      sim.tick(dt);
+      sim.tick(dt); // this brain ticks on its own clock
 
       // fallback sensory drive when the WebGL loop is not running
       if (!fx.r3fAlive) {
@@ -108,117 +106,123 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
         canvas.height = h * dpr;
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = "#03080f";
+      ctx.fillStyle = "#020508";
       ctx.fillRect(0, 0, w, h);
 
-      const pad = 10;
+      const pad = 8;
       const X = (i: number) => pad + sim.x[i] * (w - pad * 2);
       const Y = (i: number) => pad + sim.y[i] * (h - pad * 2);
 
-      // ---- organ silhouettes: left optic / central / right optic + VNC column ----
-      const blob = (nx: number, ny: number, r: number, col: string) => {
-        const cx2 = pad + nx * (w - pad * 2);
-        const cy2 = pad + ny * (h - pad * 2);
-        const g = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, r * w);
-        g.addColorStop(0, col);
-        g.addColorStop(1, "rgba(43,84,166,0)");
-        ctx.fillStyle = g;
-        ctx.fillRect(cx2 - r * w, cy2 - r * w, r * w * 2, r * w * 2);
-      };
-      blob(0.235, 0.27, 0.2, "rgba(43,84,166,0.20)");
-      blob(0.765, 0.27, 0.2, "rgba(43,84,166,0.20)");
-      blob(0.5, 0.25, 0.19, "rgba(56,90,190,0.20)");
-      blob(0.5, 0.72, 0.15, "rgba(30,110,130,0.16)");
-      // cervical connective: neck glow linking brain to VNC
-      const neck = ctx.createLinearGradient(0, pad + 0.38 * (h - pad * 2), 0, pad + 0.6 * (h - pad * 2));
-      neck.addColorStop(0, "rgba(43,84,166,0)");
-      neck.addColorStop(0.5, "rgba(43,84,166,0.14)");
-      neck.addColorStop(1, "rgba(43,84,166,0)");
-      ctx.fillStyle = neck;
-      ctx.fillRect(w * 0.35, pad + 0.36 * (h - pad * 2), w * 0.3, h * 0.28);
-
       const shown = sim.revealedCount();
-      const { act, deg } = sim;
+      const { act } = sim;
 
-      // ---- cable skeletons: halo + trunk + branch layers ----
+      // ---- rebuild geometry when the dataset / size changes ----
       const edges = sim.edgeList;
-      if (edges && edges.length) {
-        const key = `${sim.dataVersion}-${edges.length}-${w}x${h}`;
-        if (skeletonKey !== key) {
-          skeletonKey = key;
-          trunkPath = new Path2D();
-          branchPath = new Path2D();
-          haloPath = new Path2D();
-          huePathsStore = Array.from({ length: 12 }, () => new Path2D());
-          for (let k = 0; k < edges.length; k += 2) {
-            const a = edges[k];
-            const b = edges[k + 1];
-            const ax = X(a), ay = Y(a), bx = X(b), by = Y(b);
-            haloPath.moveTo(ax, ay);
-            haloPath.lineTo(bx, by);
-            const hueBucket = Math.min(11, Math.floor(sim.nodeHue[a] * 12));
-            const P = huePathsStore![hueBucket]!
-            if ((deg[a] ?? 0) >= 4 && (deg[b] ?? 0) >= 4) {
-              trunkPath.moveTo(ax, ay);
-              trunkPath.lineTo(bx, by);
-              P.moveTo(ax, ay);
-              P.lineTo(bx, by);
-            } else {
-              branchPath.moveTo(ax, ay);
-              branchPath.lineTo(bx, by);
-            }
+      const buildKey = `${sim.dataVersion}-${edges?.length ?? 0}-${w}x${h}`;
+      if (refs.buildKey !== buildKey) {
+        refs.buildKey = buildKey;
+        fiberPath = new Path2D();
+        haloPath = new Path2D();
+        webPath = new Path2D();
+        const n = sim.count;
+        // group nodes per neuron (contiguous ranges) → smooth curved arbors
+        for (const r of sim.neuronRanges) {
+          const seq: number[] = [];
+          for (let k = r.start; k < Math.min(r.start + r.count, shownMax(n)); k++) seq.push(k);
+          if (seq.length < 2) continue;
+          // smooth quadratic chain through the arbor
+          haloPath.moveTo(X(seq[0]), Y(seq[0]));
+          fiberPath.moveTo(X(seq[0]), Y(seq[0]));
+          for (let i = 1; i < seq.length; i++) {
+            const px = X(seq[i]);
+            const py = Y(seq[i]);
+            const mx = (X(seq[i - 1]) + px) / 2;
+            const my = (Y(seq[i - 1]) + py) / 2;
+            fiberPath.quadraticCurveTo(mx, my, px, py);
+            haloPath.lineTo(px, py);
           }
         }
-        ctx.lineCap = "round";
-        ctx.strokeStyle = "rgba(90,130,225,0.10)";
-        ctx.lineWidth = 4.5;
-        ctx.stroke(haloPath!);
-
-        // rainbow tissue — each neuron keeps its own hue, FlyWire-map style
-        if (huePathsStore) {
-          for (let hb = 0; hb < 12; hb++) {
-            const hdeg = Math.round((hb / 12) * 360 + 200);
-            ctx.strokeStyle = `hsla(${hdeg}, 75%, 62%, 0.5)`;
-            ctx.lineWidth = 1.1;
-            ctx.stroke(huePathsStore![hb]);
+        // synapse web between neurons
+        const syn = sim.synapseList;
+        if (syn) {
+          // local synapses only — real connections are short; long random
+          // links read as fake diagonals across the organ
+          for (let k = 0; k < syn.length; k += 2) {
+            const a = syn[k];
+            const b = syn[k + 1];
+            const dx = sim.x[a] - sim.x[b];
+            const dy = sim.y[a] - sim.y[b];
+            if (dx * dx + dy * dy > 0.02) continue;
+            webPath.moveTo(X(a), Y(a));
+            webPath.lineTo(X(b), Y(b));
           }
-        } else {
-          ctx.strokeStyle = "rgba(105,150,235,0.34)";
-          ctx.lineWidth = 1.5;
-          ctx.stroke(trunkPath!);
-          ctx.strokeStyle = "rgba(120,160,240,0.20)";
-          ctx.lineWidth = 0.8;
-          ctx.stroke(branchPath!);
         }
       }
 
-      // ---- somata (real cell bodies at each neuron's root, neuron-colored) ----
-      for (let ni = 0; ni < sim.neuronRanges.length; ni++) {
-        const r = sim.neuronRanges[ni];
-        if (r.start >= shown) continue;
-        const hue = (ni * 0.61803398875) % 1;
-        ctx.fillStyle = `hsla(${hue * 360}, 80%, 68%, 0.85)`;
+      // ---- organ bodies: filled lobes + VNC column (the "brain" mass) ----
+      const organ = (nx: number, ny: number, rx: number, ry: number, rim: number) => {
+        const cx = pad + nx * (w - pad * 2);
+        const cy = pad + ny * (h - pad * 2);
+        const rxp = rx * w;
+        const ryp = ry * h;
+        const g = ctx.createRadialGradient(cx, cy - ryp * 0.2, 0, cx, cy, Math.max(rxp, ryp));
+        g.addColorStop(0, "#0e1a38");
+        g.addColorStop(0.7, "#081026");
+        g.addColorStop(1, "#04070f");
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(X(r.start), Y(r.start), 2.6, 0, Math.PI * 2);
+        ctx.ellipse(cx, cy, rxp, ryp, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(110,140,220,${rim})`;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      };
+      organ(0.235, 0.275, 0.155, 0.24, 0.14); // left optic lobe
+      organ(0.765, 0.275, 0.155, 0.24, 0.14); // right optic lobe
+      organ(0.5, 0.25, 0.17, 0.21, 0.12); // central brain
+      organ(0.5, 0.7, 0.1, 0.24, 0.12); // VNC column
+
+      // ---- fibers: smooth curved neurites over the organ bodies ----
+      if (webPath) {
+        ctx.strokeStyle = "rgba(110,140,220,0.05)";
+        ctx.lineWidth = 0.5;
+        ctx.stroke(webPath);
+      }
+      if (haloPath) {
+        ctx.strokeStyle = "rgba(120,150,230,0.09)";
+        ctx.lineWidth = 3.2;
+        ctx.stroke(haloPath);
+      }
+      if (fiberPath) {
+        ctx.strokeStyle = "rgba(165,185,240,0.4)";
+        ctx.lineWidth = 1.05;
+        ctx.stroke(fiberPath);
+      }
+
+      // ---- somata: bright cell bodies at each neuron root ----
+      for (const r of sim.neuronRanges) {
+        if (r.start >= shown) continue;
+        const px = X(r.start);
+        const py = Y(r.start);
+        ctx.fillStyle = "rgba(200,215,255,0.8)";
+        ctx.beginPath();
+        ctx.arc(px, py, 2.2, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // ---- firing: traveling pulses riding real cables + glowing nodes ----
+      // ---- firing: pulses riding real cables + blooming nodes ----
       ctx.globalCompositeOperation = "lighter";
-
-      // spawn pulses at hot nodes
       let spawns = 0;
       for (let tries = 0; tries < 12 && pulses.length < 160 && spawns < 5; tries++) {
         const i = (Math.random() * shown) | 0;
         if (sim.act[i] > 0.6 && sim.degree(i) > 0) {
-          pulses.push({ a: i, b: sim.pulseTarget(i), t: 0, speed: 3 + Math.random() * 4, hops: 6 + ((Math.random() * 8) | 0), hue: sim.region[i] === 2 ? 1 : 0 });
+          pulses.push({ a: i, b: sim.pulseTarget(i), t: 0, speed: 3 + Math.random() * 4, hops: 6 + ((Math.random() * 8) | 0) });
           spawns++;
         }
       }
       for (let p = pulses.length - 1; p >= 0; p--) {
         const pl = pulses[p];
         pl.t += pl.speed * dt;
-        const spr = pl.hue === 1 ? spriteCyan : spriteMint;
         if (pl.t >= 1) {
           pl.a = pl.b;
           pl.b = sim.pulseTarget(pl.a);
@@ -230,33 +234,15 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
         }
         const px = X(pl.a) + (X(pl.b) - X(pl.a)) * pl.t;
         const py = Y(pl.a) + (Y(pl.b) - Y(pl.a)) * pl.t;
-        ctx.drawImage(spr, px - 5, py - 5, 10, 10);
+        ctx.drawImage(spriteCyan, px - 5, py - 5, 10, 10);
       }
-
-      // ---- tissue layer: every node as a dim neuron-colored pixel (cached) ----
-      const tissueKey = `${sim.dataVersion}-${shown}-${w}x${h}`;
-      if (tissueKey !== tissueKeyRef || !tissueCanvas) {
-        tissueKeyRef = tissueKey;
-        const tc = document.createElement("canvas");
-        tc.width = Math.max(1, w);
-        tc.height = Math.max(1, h);
-        const tx = tc.getContext("2d")!;
-        for (let i = 0; i < shown; i++) {
-          tx.fillStyle = `hsla(${sim.nodeHue[i] * 360}, 70%, 60%, 0.5)`;
-          tx.fillRect(X(i), Y(i), 1.6, 1.6);
-        }
-        tissueCanvas = tc;
-      }
-      ctx.drawImage(tissueCanvas, 0, 0, w, h);
-
-      // active nodes bloom over the skeleton
       for (let i = 0; i < shown; i++) {
         const a = sim.act[i];
         if (a <= 0.15) continue;
         const px = X(i);
         const py = Y(i);
         const spr = a > 0.85 ? spriteHot : a > 0.45 ? spriteMint : spriteCyan;
-        const size = 5 + a * 7;
+        const size = 6 + a * 8;
         ctx.globalAlpha = Math.min(1, 0.3 + a * 0.6);
         ctx.drawImage(spr, px - size / 2, py - size / 2, size, size);
       }
@@ -268,6 +254,10 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [sim, drive]);
+
+  function shownMax(n: number) {
+    return n;
+  }
 
   const loading = loadPct < 100;
   const fetching = loadPct < 50;
