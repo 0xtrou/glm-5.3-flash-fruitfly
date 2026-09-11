@@ -40,6 +40,24 @@ function SimClock() {
   );
 }
 
+function TrackNames() {
+  const [names, setNames] = useState<{ wire: string; janelia: string } | null>(null);
+  useEffect(() => {
+    const id = setInterval(() => setNames(audioEngine.brains.trackNames()), 500);
+    return () => clearInterval(id);
+  }, []);
+  if (!names) {
+    return (
+      <span className="font-mono text-[10px] text-emerald-300/50">DJ FLYWIRE × MC JANELIA · 128 BPM</span>
+    );
+  }
+  return (
+    <span className="font-mono text-[10px] text-emerald-300/70">
+      ♪ {names.wire} <span className="text-slate-600">×</span> {names.janelia}
+    </span>
+  );
+}
+
 function StatusStrip() {
   const [status, setStatus] = useState({ code: "STANDBY", detail: "", progress: 0 });
   const [telemetry, setTelemetry] = useState("");
@@ -47,9 +65,11 @@ function StatusStrip() {
     const id = setInterval(() => {
       const s = useGame.getState();
       setStatus(statusFor(s, audioEngine.bar));
+      const tn = audioEngine.brains.trackNames();
       setTelemetry(
         `FLYWIRE m${Math.round(flywireSim.motorRate() * 100)}/t${Math.round(flywireSim.thinkRate() * 100)}` +
-          ` — JANELIA m${Math.round(janeliaSim.motorRate() * 100)}/t${Math.round(janeliaSim.thinkRate() * 100)}`
+          ` — JANELIA m${Math.round(janeliaSim.motorRate() * 100)}/t${Math.round(janeliaSim.thinkRate() * 100)}` +
+          (tn ? ` · ♪ ${tn.wire} × ${tn.janelia}` : "")
       );
     }, 120);
     return () => clearInterval(id);
@@ -112,7 +132,7 @@ export function FlytapeApp() {
             <h2 className="text-[12px] font-black tracking-[0.14em] text-emerald-300">
               DECKS <span className="text-emerald-300/40">/</span> LIVE RHYTHM DEPLOYMENT
             </h2>
-            <span className="font-mono text-[10px] text-emerald-300/50">DJ FLYWIRE × MC JANELIA · 128 BPM</span>
+            <TrackNames />
           </header>
           <div className="relative min-h-0 flex-1">
             <DjGame />

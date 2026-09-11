@@ -249,12 +249,12 @@ function EventConsumer() {
       if (ev.type === "kick") {
         if (strobe.current) strobe.current.intensity += 5.5;
         // kicks hit FLYWIRE's brain — he rides the low end
-        flywireSim.inject(REGION_OL, 0.5, 60);
+        flywireSim.inject(REGION_OL, 0.5, 130);
       }
       if (ev.type === "snare") {
         // snares drive MC JANELIA — the hype side
-        janeliaSim.inject(REGION_CX, 0.5, 60);
-        janeliaSim.inject(REGION_OL, 0.25, 40);
+        janeliaSim.inject(REGION_CX, 0.5, 130);
+        janeliaSim.inject(REGION_OL, 0.25, 70);
       }
       if (ev.type === "reward") {
         // audit-log landed → emerald reward pulse on the stage

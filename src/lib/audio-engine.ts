@@ -118,7 +118,7 @@ class BrainPlayer {
       const boost = this.boostFor;
       if (on && this.rand() < 0.97) {
         const extra = this.rand() < 0.1 ? 14 : 0;
-        this.brain.stimulate(ch, Math.round((38 + ((this.rand() * 12) | 0) + extra) * boost), (1.12 + this.rand() * 0.1) * Math.min(1.15, boost));
+        this.brain.stimulate(ch, Math.round((38 + ((this.rand() * 12) | 0) + extra) * boost), 1.18 + this.rand() * 0.12);
       } else if (!on && this.rand() < 0.12) {
         // spontaneous off-grid thought
         this.brain.stimulate(ch, 12 + ((this.rand() * 10) | 0), 0.85);
@@ -231,6 +231,11 @@ class BrainModeController {
 
   lastBarSpikeCounts() {
     return this.lastBarCounts;
+  }
+
+  trackNames(): { wire: string; janelia: string } | null {
+    if (!this.players) return null;
+    return { wire: this.players.wire.trackStyle, janelia: this.players.janelia.trackStyle };
   }
 
   /**
