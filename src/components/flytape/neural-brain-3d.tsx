@@ -292,7 +292,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       const vFov = (FOV * Math.PI) / 180;
       const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
       const theta = Math.min(vFov, hFov);
-      camDist = Math.min(80, Math.max(5, radius / Math.sin(theta / 2) / 1.85));
+      camDist = Math.min(80, Math.max(4, radius / Math.sin(theta / 2) / 2.6));
       camera.updateProjectionMatrix();
       nodeMat.uniforms.uRefDist.value = camDist;
       somaMat.uniforms.uRefDist.value = camDist;

@@ -24,33 +24,33 @@ export interface Neuropil {
 
 export const NEUROPHILS: Neuropil[] = [
   // ---- optic lobes (flank the central brain, same band) ----
-  { name: "Medulla L", cx: -0.34, cy: 0.1, cz: 0.05, rx: 0.17, ry: 0.22, rz: 0.14 },
-  { name: "Medulla R", cx: 0.34, cy: 0.1, cz: 0.05, rx: 0.17, ry: 0.22, rz: 0.14 },
-  { name: "Lobula L", cx: -0.42, cy: -0.12, cz: -0.05, rx: 0.09, ry: 0.12, rz: 0.1 },
-  { name: "Lobula R", cx: 0.42, cy: -0.12, cz: -0.05, rx: 0.09, ry: 0.12, rz: 0.1 },
-  { name: "Lobula plate L", cx: -0.47, cy: 0.1, cz: -0.12, rx: 0.06, ry: 0.11, rz: 0.08 },
-  { name: "Lobula plate R", cx: 0.47, cy: 0.1, cz: -0.12, rx: 0.06, ry: 0.11, rz: 0.08 },
+  { name: "Medulla L", cx: -0.245, cy: 0.044, cz: 0.05, rx: 0.156, ry: 0.202, rz: 0.129 },
+  { name: "Medulla R", cx: 0.245, cy: 0.044, cz: 0.05, rx: 0.156, ry: 0.202, rz: 0.129 },
+  { name: "Lobula L", cx: -0.302, cy: -0.114, cz: -0.05, rx: 0.083, ry: 0.11, rz: 0.092 },
+  { name: "Lobula R", cx: 0.302, cy: -0.114, cz: -0.05, rx: 0.083, ry: 0.11, rz: 0.092 },
+  { name: "Lobula plate L", cx: -0.338, cy: 0.044, cz: -0.12, rx: 0.055, ry: 0.101, rz: 0.074 },
+  { name: "Lobula plate R", cx: 0.338, cy: 0.044, cz: -0.12, rx: 0.055, ry: 0.101, rz: 0.074 },
 
   // ---- central brain (compact core) ----
-  { name: "Antennal lobe L", cx: -0.1, cy: -0.26, cz: 0.28, rx: 0.09, ry: 0.08, rz: 0.07 },
-  { name: "Antennal lobe R", cx: 0.1, cy: -0.26, cz: 0.28, rx: 0.09, ry: 0.08, rz: 0.07 },
-  { name: "Mushroom body calyx L", cx: -0.14, cy: 0.14, cz: 0.1, rx: 0.08, ry: 0.08, rz: 0.07 },
-  { name: "Mushroom body calyx R", cx: 0.14, cy: 0.14, cz: 0.1, rx: 0.08, ry: 0.08, rz: 0.07 },
-  { name: "Mushroom body lobe L", cx: -0.12, cy: -0.04, cz: 0.12, rx: 0.05, ry: 0.12, rz: 0.05 },
-  { name: "Mushroom body lobe R", cx: 0.12, cy: -0.04, cz: 0.12, rx: 0.05, ry: 0.12, rz: 0.05 },
-  { name: "Fan-shaped body", cx: 0, cy: 0.1, cz: 0.02, rx: 0.09, ry: 0.055, rz: 0.05 },
-  { name: "Ellipsoid body", cx: 0, cy: 0.005, cz: 0.04, rx: 0.08, ry: 0.045, rz: 0.045 },
-  { name: "Noduli L", cx: -0.06, cy: 0.055, cz: -0.02, rx: 0.045, ry: 0.045, rz: 0.045 },
-  { name: "Noduli R", cx: 0.06, cy: 0.055, cz: -0.02, rx: 0.045, ry: 0.045, rz: 0.045 },
-  { name: "Superior protocerebrum L", cx: -0.15, cy: 0.24, cz: 0.05, rx: 0.11, ry: 0.09, rz: 0.08 },
-  { name: "Superior protocerebrum R", cx: 0.15, cy: 0.24, cz: 0.05, rx: 0.11, ry: 0.09, rz: 0.08 },
-  { name: "Gnathal ganglia", cx: 0, cy: -0.34, cz: 0.05, rx: 0.09, ry: 0.07, rz: 0.07 },
+  { name: "Antennal lobe L", cx: -0.072, cy: -0.215, cz: 0.28, rx: 0.083, ry: 0.074, rz: 0.064 },
+  { name: "Antennal lobe R", cx: 0.072, cy: -0.215, cz: 0.28, rx: 0.083, ry: 0.074, rz: 0.064 },
+  { name: "Mushroom body calyx L", cx: -0.101, cy: 0.073, cz: 0.1, rx: 0.074, ry: 0.074, rz: 0.064 },
+  { name: "Mushroom body calyx R", cx: 0.101, cy: 0.073, cz: 0.1, rx: 0.074, ry: 0.074, rz: 0.064 },
+  { name: "Mushroom body lobe L", cx: -0.086, cy: -0.057, cz: 0.12, rx: 0.046, ry: 0.11, rz: 0.046 },
+  { name: "Mushroom body lobe R", cx: 0.086, cy: -0.057, cz: 0.12, rx: 0.046, ry: 0.11, rz: 0.046 },
+  { name: "Fan-shaped body", cx: 0.0, cy: 0.044, cz: 0.02, rx: 0.083, ry: 0.051, rz: 0.046 },
+  { name: "Ellipsoid body", cx: 0.0, cy: -0.024, cz: 0.04, rx: 0.074, ry: 0.041, rz: 0.041 },
+  { name: "Noduli L", cx: -0.043, cy: 0.012, cz: -0.02, rx: 0.041, ry: 0.041, rz: 0.041 },
+  { name: "Noduli R", cx: 0.043, cy: 0.012, cz: -0.02, rx: 0.041, ry: 0.041, rz: 0.041 },
+  { name: "Superior protocerebrum L", cx: -0.108, cy: 0.145, cz: 0.05, rx: 0.101, ry: 0.083, rz: 0.074 },
+  { name: "Superior protocerebrum R", cx: 0.108, cy: 0.145, cz: 0.05, rx: 0.101, ry: 0.083, rz: 0.074 },
+  { name: "Gnathal ganglia", cx: 0.0, cy: -0.273, cz: 0.05, rx: 0.083, ry: 0.064, rz: 0.064 },
 
   // ---- VNC: straight down the middle ----
-  { name: "Prothoracic neuromere T1", cx: 0, cy: -0.48, cz: 0, rx: 0.09, ry: 0.06, rz: 0.06 },
-  { name: "Mesothoracic neuromere T2", cx: 0, cy: -0.6, cz: 0, rx: 0.1, ry: 0.06, rz: 0.06 },
-  { name: "Metathoracic neuromere T3", cx: 0, cy: -0.71, cz: 0, rx: 0.09, ry: 0.055, rz: 0.06 },
-  { name: "Abdominal neuromeres", cx: 0, cy: -0.82, cz: 0, rx: 0.075, ry: 0.07, rz: 0.055 },
+  { name: "Prothoracic neuromere T1", cx: 0.0, cy: -0.374, cz: 0, rx: 0.083, ry: 0.055, rz: 0.055 },
+  { name: "Mesothoracic neuromere T2", cx: 0.0, cy: -0.46, cz: 0, rx: 0.092, ry: 0.055, rz: 0.055 },
+  { name: "Metathoracic neuromere T3", cx: 0.0, cy: -0.539, cz: 0, rx: 0.083, ry: 0.051, rz: 0.055 },
+  { name: "Abdominal neuromeres", cx: 0.0, cy: -0.618, cz: 0, rx: 0.069, ry: 0.064, rz: 0.051 },
 ];
 
 /**
