@@ -5,7 +5,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Sparkles, Html } from "@react-three/drei";
 import type { Group, Mesh, PointLight, InstancedMesh } from "three";
 import { Object3D } from "three";
-import { audioEngine } from "@/lib/audio-engine";
+import { audioEngine, BPM } from "@/lib/audio-engine";
 import { useGame } from "@/lib/game-store";
 import { flywireSim, janeliaSim, REGION_OL, REGION_CX, REGION_VNC } from "@/lib/neural-sim";
 import { TheCrew } from "./flies";
@@ -137,7 +137,7 @@ function Crowd({ count = 64 }: { count?: number }) {
       x: -4.4 + ((i * 7.3) % 8.8) + Math.sin(i * 12.9) * 0.3,
       z: 1.4 + ((i * 3.7) % 10) * 0.34,
       phase: (i * 1.618) % (Math.PI * 2),
-      speed: ((Math.PI * 2) / (60 / 128)) * (0.9 + ((i * 0.37) % 0.25)),
+      speed: ((Math.PI * 2) / (60 / BPM)) * (0.9 + ((i * 0.37) % 0.25)),
     }))
   );
 

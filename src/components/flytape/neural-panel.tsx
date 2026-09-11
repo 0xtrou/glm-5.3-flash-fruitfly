@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NeuralSim } from "@/lib/neural-sim";
 import { TOTAL_SOMATA } from "@/lib/neural-sim";
+import { audioEngine } from "@/lib/audio-engine";
 import { NeuralBrain3D, driveSensory } from "./neural-brain-3d";
 
 interface Props {
@@ -11,6 +12,8 @@ interface Props {
   accent: string;
   /** which audio transient drives this brain when the WebGL loop is not running */
   drive: "kick" | "treble";
+  /** which trained brain this panel belongs to — util % reads ITS nodes */
+  fly: "wire" | "janelia";
 }
 
 /**
@@ -21,7 +24,7 @@ interface Props {
  * Rendering is a dedicated Three.js scene (see neural-brain-3d.tsx); while
  * WebGL is unavailable this panel keeps the sim alive with a bare ticker.
  */
-export function NeuralPanel({ sim, title, accent, drive }: Props) {
+export function NeuralPanel({ sim, title, accent, drive, fly }: Props) {
   const [mounted, setMounted] = useState(false);
   const [webglFailed, setWebglFailed] = useState(false);
   const webglRef = useRef(false);
@@ -56,6 +59,7 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
   }, []);
 
   const [levels, setLevels] = useState({ motor: 0, central: 0 });
+  const [util, setUtil] = useState(0);
   const [info, setInfo] = useState({ real: false, neurons: 0, points: 0, archives: [] as string[] });
 
   useEffect(() => setMounted(true), []);
@@ -69,6 +73,8 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
     const iv = setInterval(() => {
       setLoadPct(Math.round(sim.loadProgress * 100));
       setLevels({ motor: sim.motorLevel(), central: sim.centralLevel() });
+      // real node utilization of THIS fly's trained brain (last 4 bars)
+      setUtil(audioEngine.brains.participation(512)[fly]);
       if (sim.realData) {
         setInfo({
           real: true,
@@ -153,12 +159,22 @@ export function NeuralPanel({ sim, title, accent, drive }: Props) {
         )}
       </div>
 
-      <footer className="grid grid-cols-3 items-end gap-1.5 border-t border-white/10 bg-[#071510] px-2.5 py-1.5 text-[10px] leading-tight">
+      <footer className="grid grid-cols-4 items-end gap-1.5 border-t border-white/10 bg-[#071510] px-2.5 py-1.5 text-[10px] leading-tight">
         <div>
           <span className="font-bold text-slate-200">Brain</span>
           <span className="ml-1 text-slate-500">
             {info.real ? `${info.neurons} real · ${info.archives.join("+")}` : loadPct >= 100 ? "procedural atlas (offline)" : "loading…"}
           </span>
+        </div>
+        <div className="text-center">
+          <span
+            className="font-bold"
+            style={{ color: util >= 0.8 ? "#34d399" : "#fbbf24" }}
+            title="nodes fired within the last 4 bars (target ≥ 80%)"
+          >
+            {Math.round(util * 100)}%
+          </span>
+          <span className="ml-1 text-slate-500">util</span>
         </div>
         <div className="text-center font-mono text-[9px] text-slate-500">
           <span className="text-emerald-400">+rate</span> · <span className="text-sky-400">-rate</span> · motor{" "}

@@ -17,7 +17,8 @@ export interface VisualEvent {
   type: "kick" | "snare" | "bar" | "drop" | "drop-end" | "reward";
 }
 
-const BPM = 128;
+/** playback tempo — single source of truth for every BPM display */
+export const BPM = 96;
 /** nearest-onset pitch lookup for a melodic channel (what the brain learned) */
 function corpusPitchAt(corpus: typeof FLYWIRE_CORPUS, step: number, channel: number): number {
   const on = corpus.onsets[channel % corpus.onsets.length];

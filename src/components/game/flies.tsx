@@ -5,10 +5,10 @@ import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import type { Group, Mesh } from "three";
 import { useGame } from "@/lib/game-store";
-import { audioEngine } from "@/lib/audio-engine";
+import { audioEngine, BPM } from "@/lib/audio-engine";
 
 
-const BEAT = 60 / 128;
+const BEAT = 60 / BPM;
 
 export interface FlyProps {
   name: string;

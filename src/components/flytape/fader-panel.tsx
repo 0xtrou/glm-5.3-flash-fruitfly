@@ -15,17 +15,20 @@ import { audioEngine } from "@/lib/audio-engine";
 export function FaderPanel() {
   const phase = useGame((s) => s.phase);
   const dropped = useGame((s) => s.dropped);
-  const [levels, setLevels] = useState({ wm: 0, wt: 0, jm: 0, jt: 0 });
+  const [levels, setLevels] = useState({ wm: 0, wt: 0, jm: 0, jt: 0, wu: 0, ju: 0 });
 
   useEffect(() => {
     const id = setInterval(() => {
       const wire = audioEngine.brains.flyDrive("wire");
       const janelia = audioEngine.brains.flyDrive("janelia");
+      const util = audioEngine.brains.participation(512);
       setLevels({
         wm: wire.motor,
         wt: wire.think,
         jm: janelia.motor,
         jt: janelia.think,
+        wu: util.wire,
+        ju: util.janelia,
       });
     }, 250);
     return () => clearInterval(id);
@@ -50,8 +53,8 @@ export function FaderPanel() {
 
       <div className="flex items-center justify-center gap-8 px-4 py-3">
         {[
-          { name: "FLYWIRE", m: levels.wm, t: levels.wt, accent: "#ff5c5c" },
-          { name: "JANELIA", m: levels.jm, t: levels.jt, accent: "#c084fc" },
+          { name: "FLYWIRE", m: levels.wm, t: levels.wt, u: levels.wu, accent: "#ff5c5c" },
+          { name: "JANELIA", m: levels.jm, t: levels.jt, u: levels.ju, accent: "#c084fc" },
         ].map((f) => (
           <div key={f.name} className="flex items-center gap-2.5">
             <svg width="38" height="40" viewBox="0 0 34 34" aria-hidden>
@@ -72,6 +75,12 @@ export function FaderPanel() {
                 />
               </div>
               <span className="text-[9px] font-black tracking-wider text-white/50">{f.name}</span>
+              <span
+                className="font-mono text-[9px] font-bold"
+                style={{ color: f.u >= 0.8 ? "#34d399" : "#fbbf24" }}
+              >
+                util {Math.round(f.u * 100)}%
+              </span>
             </div>
           </div>
         ))}
