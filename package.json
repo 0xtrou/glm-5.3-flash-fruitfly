@@ -1,6 +1,6 @@
 {
-  "name": "fly-dj",
-  "version": "0.1.0",
+  "name": "flytape",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -33,5 +33,7 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5"
-  }
+  },
+  "description": "FLYTAPE \u2014 two spiking fly brains (real Drosophila morphology, reward-modulated STDP) generating every note of a live set from their own spikes",
+  "license": "MIT"
 }
