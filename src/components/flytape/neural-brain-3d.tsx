@@ -112,7 +112,7 @@ void main() {
   fire = mix(fire, vec3(1.00, 0.72, 0.28), smoothstep(0.50, 0.85, a));
   fire = mix(fire, vec3(1.00, 0.97, 0.86), smoothstep(0.85, 1.25, a));
   float w = smoothstep(0.15, 0.40, a); // below 0.15 = dim structure only
-  vec3 col = mix(dim, fire * (0.75 + a * 0.70), w);
+  vec3 col = mix(dim, fire * (0.55 + a * 0.32), w);
   gl_FragColor = vec4(col * disk, disk);
 }
 `;
@@ -145,7 +145,7 @@ void main() {
   vec3 hue = hue2rgb(vHue);
   float glow = smoothstep(0.05, 1.0, max(vAct, 0.0));
   vec3 col = mix(hue * 0.45 + 0.42, vec3(1.00, 0.97, 0.88), glow * 0.85);
-  gl_FragColor = vec4(col * disk * (0.75 + glow * 1.1), disk);
+  gl_FragColor = vec4(col * disk * (0.7 + glow * 0.6), disk);
 }
 `;
 
@@ -230,7 +230,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
     const lineMat = new THREE.LineBasicMaterial({
       color: 0x6f8fd0,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.3,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -254,7 +254,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
     // ---- postprocessing: bloom is what makes it read "living brain" ----
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 1.0, 0.55, 0);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.3, 0.55);
     composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
 
@@ -488,7 +488,7 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
       }
       actAttr.needsUpdate = true;
       // cables breathe with population firing
-      lineMat.opacity = 0.13 + 0.08 * Math.min(1, hot / 800);
+      lineMat.opacity = 0.24 + 0.1 * Math.min(1, hot / 800);
 
       const somaAttr = somaGeo.getAttribute("aAct") as THREE.BufferAttribute;
       const sArr = somaAttr.array as Float32Array;
