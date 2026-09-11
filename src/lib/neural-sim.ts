@@ -1,3 +1,5 @@
+import type { FlywireTopology } from "./flywire-brain";
+
 /**
  * Fly CNS spiking network — FLYTAPE neural activity feed.
  *
@@ -70,6 +72,9 @@ export class NeuralSim {
   private revealed = 9000;
   /** undirected cable pairs from the real reconstructions — drawn as skeletons */
   edgeList: Uint32Array | null = null;
+  positionsReal: Float32Array = new Float32Array(0);
+  adjStartFly: Uint32Array = new Uint32Array(0);
+  adjPostFly: Uint32Array = new Uint32Array(0);
   /** total synapse degree per node — thick trunks vs thin branches */
   deg: Uint32Array = new Uint32Array(0);
   /** modeled inter-neuron synapses — the visible connectome web */
@@ -173,6 +178,76 @@ export class NeuralSim {
       deg[pairs[k + 1]]++;
     }
     this.deg = deg;
+  }
+
+  /**
+   * Adopt the FlyWire FAFB v783 whole-brain graph: every node IS a real
+   * neuron (139,255 of them), adjacency is the real proofread connectome.
+   * Region for coloring comes from real JRC2018 position (lateral = optic
+   * lobe, low = VNC output territory, else central brain).
+   */
+  adoptFlywire(topo: FlywireTopology) {
+    const n = topo.n;
+    this.x = new Float32Array(n);
+    this.y = new Float32Array(n);
+    this.z = new Float32Array(n);
+    this.region = new Uint8Array(n);
+    const pools: number[][] = [[], [], []];
+    for (let i = 0; i < n; i++) {
+      const x = topo.positions[i * 3];
+      const y = topo.positions[i * 3 + 1];
+      const z = topo.positions[i * 3 + 2];
+      this.x[i] = x;
+      this.y[i] = y;
+      this.z[i] = z;
+      let r: Region;
+      if (Math.abs(x) >= 0.18) r = REGION_OL;
+      else if (y <= -0.2) r = REGION_VNC;
+      else r = REGION_CX;
+      this.region[i] = r;
+      pools[r].push(i);
+    }
+    this.poolIdx = pools;
+    this.positionsReal = new Float32Array(topo.positions);
+    // skeleton lines: a deterministic sample of real connections (~60k)
+    const lineCap = 60000;
+    const stride = Math.max(1, Math.floor(topo.edgeCount / lineCap));
+    const undirected: number[] = [];
+    for (let pre = 0; pre < n; pre += 1) {
+      const from = topo.adjStart[pre];
+      const to = topo.adjStart[pre + 1];
+      if (to > from) {
+        const post = topo.adjPost[from];
+        if ((pre * 7 + post) % stride === 0 && undirected.length < lineCap * 2) {
+          undirected.push(pre, post);
+        }
+      }
+    }
+    this.edgeList = new Uint32Array(undirected);
+    this.adjStartFly = topo.adjStart;
+    this.adjPostFly = topo.adjPost;
+    // node degree from real out-degree (thicker trunks = bigger hubs)
+    this.deg = new Uint32Array(n);
+    for (let pre = 0; pre < n; pre++) {
+      const d = topo.adjStart[pre + 1] - topo.adjStart[pre];
+      this.deg[pre] = Math.min(15, d);
+    }
+    this.nodeHue = new Float32Array(n);
+    for (let i = 0; i < n; i++) this.nodeHue[i] = (i * 0.61803398875) % 1;
+    this.neuronRanges = []; // every node is its own neuron — somata would duplicate
+    this.act = new Float32Array(n);
+    this.count = n;
+    this.realData = true;
+    this.loadProgress = 1;
+    this.revealed = n;
+    this.dataVersion++;
+    this.info = {
+      neurons: n,
+      points: n,
+      archives: ["FlyWire FAFB v783"],
+      source: "FlyWire FAFB v783 proofread connectome (Dorkenwald et al. 2024)",
+    };
+    this.auditEvent(`dataset loaded — ${n} real neurons, ${n} nodes`);
   }
 
   /** Fetch this fly's real morphologies and swap the atlas out from under the panel. */
@@ -369,12 +444,20 @@ export class NeuralSim {
   }
 }
 
-export const TOTAL_SOMATA = 140024;
+export const TOTAL_SOMATA = 139255; // FlyWire FAFB v783 proofread neurons — all of them simulated
 
 /** Two independent brains — one per fly, each with its own real neurons + dynamics. */
 export const flywireSim = new NeuralSim("/data/fly-neurons-wire.json");
 export const janeliaSim = new NeuralSim("/data/fly-neurons-janelia.json");
 export function bootNeuralSims() {
-  void flywireSim.loadReal();
-  void janeliaSim.loadReal();
+  void (async () => {
+    const { loadFlywireTopology } = await import("./flywire-brain");
+    const topo = await loadFlywireTopology(DATA_VERSION);
+    flywireSim.adoptFlywire(topo);
+    janeliaSim.adoptFlywire(topo);
+  })().catch(() => {
+    // bundles unreachable — panels keep the procedural atlas, honestly labeled
+    flywireSim.realData = false;
+    janeliaSim.realData = false;
+  });
 }

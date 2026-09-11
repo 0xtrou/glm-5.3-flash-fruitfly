@@ -38,6 +38,11 @@ export interface TrainOptions {
   f1Target?: number;
   /** teacher-free fine-tune epochs after the main run (consequences only) */
   fineTuneEpochs?: number;
+  /** calibration knobs (scale with brain size) */
+  humStart?: number;
+  humCap?: number;
+  humStep?: number;
+  participationTarget?: number;
 }
 
 /**
@@ -48,6 +53,27 @@ export interface TrainOptions {
  */
 export function trainBrain(
   data: { points: [number, number, number][]; edges: [number, number][]; neurons: { region: "brain" | "vnc"; count: number }[] },
+  corpus: Corpus,
+  opts: TrainOptions
+): TrainResult {
+  const { graph, inputGroups, motorGroups } = buildGraphFromDataset(data, {
+    seed: opts.seed,
+    inputPerChannel: 140,
+    motorPerChannel: 110,
+    channels: corpus.channels,
+  });
+  const brain = new LIFBrain(graph, { seed: opts.seed, inputGroups, motorGroups });
+  return trainExistingBrain(brain, corpus, opts);
+}
+
+/**
+ * Run the full training protocol (R-STDP + fading teacher + best checkpoint
+ * + fine-tune + calibration + generation test) on an ALREADY-CONSTRUCTED
+ * brain. This is how the FlyWire whole-brain connectome trains: the core
+ * builds from the real CSR topology, the protocol stays identical.
+ */
+export function trainExistingBrain(
+  brain: LIFBrain,
   corpus: Corpus,
   opts: TrainOptions
 ): TrainResult {
@@ -62,14 +88,10 @@ export function trainBrain(
   const f1Target = opts.f1Target ?? 0.6;
   // teacher-free fine-tune epochs after the main run: consequences only
   const fineTuneEpochs = opts.fineTuneEpochs ?? 40;
-
-  const { graph, inputGroups, motorGroups } = buildGraphFromDataset(data, {
-    seed: opts.seed,
-    inputPerChannel: 140,
-    motorPerChannel: 110,
-    channels: corpus.channels,
-  });
-  const brain = new LIFBrain(graph, { seed: opts.seed, inputGroups, motorGroups });
+  const humStart = opts.humStart ?? 300;
+  const humCap = opts.humCap ?? 2000;
+  const humStep = opts.humStep ?? 250;
+  const participationTarget = opts.participationTarget ?? 0.8;
   // NOTE: descending grafts deliberately start WEAK (initial 0.06–0.16
   // weights, below the elevated motor threshold). Pre-boosting them let
   // tonic brain chatter fire motor pools continuously — no rhythm. Kept
@@ -228,9 +250,9 @@ export function trainBrain(
   // The earlier seizure was different: above-threshold hum and NO motor
   // elevation — 99% participation with flat motor output.
   brain.wGain = 1.4;
-  let ambientCount = 300;
+  let ambientCount = humStart;
   let participation = 0;
-  let usedAmbient = 300;
+  let usedAmbient = humStart;
   for (let attempt = 0; attempt < 14; attempt++) {
     // 32-step playback pass ×2, count unique firing nodes via lastFire window
     for (let rep = 0; rep < 2; rep++) {
@@ -249,9 +271,9 @@ export function trainBrain(
     participation = fired / brain.n;
     usedAmbient = ambientCount;
     console.log(`  calibration ${attempt}: wGain=${brain.wGain.toFixed(2)} ambient=${ambientCount} participation=${(participation * 100).toFixed(0)}%`);
-    if (participation >= 0.8) break;
+    if (participation >= participationTarget) break;
     if (brain.wGain < 1.8) brain.wGain += 0.1;
-    else if (ambientCount < 2000) { ambientCount += 250; brain.ambientCount = ambientCount; } // gain capped — widen the excited pool via hum
+    else if (ambientCount < humCap) { ambientCount += humStep; brain.ambientCount = ambientCount; } // gain capped — widen the excited pool via hum
     else break; // caps reached — report the honest number
   }
   brain.ambientCount = usedAmbient; // export what was actually calibrated

@@ -1,4 +1,5 @@
 import { LIFBrain } from "./brain/core";
+import { buildFlywireBrain, loadFlywireTopology, loadFlywireWeights, type FlywireTopology } from "./flywire-brain";
 import {
   FLYWIRE_CORPUS,
   FLYWIRE_TRACK_B,
@@ -81,34 +82,13 @@ class BrainPlayer {
     return this.corpus.style;
   }
 
-  constructor(weights: BrainWeights, tracks: (typeof FLYWIRE_CORPUS)[], seed: number, boost = 1, ambient = 900) {
+  constructor(brain: LIFBrain, tracks: (typeof FLYWIRE_CORPUS)[], boost = 1, ambient = 900) {
     this.boostFor = boost;
     this.ambient = ambient;
     this.tracks = tracks;
     this.corpus = tracks[0];
-    this.brain = new LIFBrain(
-      { points: new Array(weights.n).fill(0) as [number, number, number][], edges: [], neuronCount: weights.n },
-      { seed, inputGroups: weights.inputGroups, motorGroups: weights.motorGroups }
-    );
-    // adopt trained topology + weights without re-randomizing
-    this.brain.n = weights.n;
-    this.brain.adjStart = new Uint32Array(weights.adjStart);
-    this.brain.adjPost = new Uint32Array(weights.adjPost);
-    this.brain.adjW = new Float32Array(weights.adjW);
-    this.brain.revStart = new Uint32Array(weights.revStart);
-    this.brain.revPre = new Uint32Array(weights.revPre);
-    this.brain.revE = new Float32Array(weights.revE.length);
-    this.brain.v = new Float32Array(weights.n);
-    this.brain.refracUntil = new Int32Array(weights.n);
-    this.brain.preTrace = new Float32Array(weights.n);
-    this.brain.postTrace = new Float32Array(weights.n);
-    // cascade gain from training calibration (fallback 1.7)
-    this.brain.wGain = (weights as { wGain?: number }).wGain ?? 1.7;
-    this.brain.leak = 0.1;
-    this.brain.inputGroups = weights.inputGroups;
-    this.brain.motorGroups = weights.motorGroups;
-    // topology arrays were adopted directly — rebuild the synapse pairing map
-    this.brain.rebuildRevPair();
+    this.brain = brain;
+    brain.learning = false; // live playback: delivery only, no plasticity
   }
 
   private improvSeed = 7;
@@ -186,6 +166,7 @@ class BrainModeController {
     janelia: { motor: 0, think: 0 },
   };
   private players: { wire: BrainPlayer; janelia: BrainPlayer } | null = null;
+  private topology: FlywireTopology | null = null;
 
   get ready(): boolean {
     return this.loaded;
@@ -200,13 +181,20 @@ class BrainModeController {
     if (this.loaded || this.loading) return;
     this.loading = true;
     try {
-      const [w, j] = await Promise.all([
-        fetch(`/data/weights-wire.json?v=${DATA_VERSION}`).then((r) => r.json()),
-        fetch(`/data/weights-janelia.json?v=${DATA_VERSION}`).then((r) => r.json()),
+      // both DJs fly the SAME real brain — the FlyWire FAFB v783 proofread
+      // connectome — with independently trained weights and different corpora
+      const [topo, ambient, ww, wj] = await Promise.all([
+        loadFlywireTopology(DATA_VERSION),
+        fetch(`/data/flywire-ambient.json?v=${DATA_VERSION}`).then((r) => r.json()) as Promise<{ wire: number; janelia: number }>,
+        loadFlywireWeights("wire", DATA_VERSION),
+        loadFlywireWeights("janelia", DATA_VERSION),
       ]);
+      this.topology = topo;
+      const wireBrain = buildFlywireBrain(topo, ww, { seed: 11, learning: false });
+      const janeliaBrain = buildFlywireBrain(topo, wj, { seed: 47, learning: false });
       this.players = {
-        wire: new BrainPlayer(w, [FLYWIRE_CORPUS, FLYWIRE_TRACK_F, FLYWIRE_TRACK_D, FLYWIRE_TRACK_B, FLYWIRE_TRACK_E, FLYWIRE_TRACK_C], 11, 2.6, (w as { ambient?: number }).ambient ?? 900),
-        janelia: new BrainPlayer(j, [JANELIA_CORPUS, JANELIA_TRACK_G, JANELIA_TRACK_H, JANELIA_TRACK_I, JANELIA_TRACK_D, JANELIA_TRACK_E, JANELIA_TRACK_B, JANELIA_TRACK_C], 47, 1.5, (j as { ambient?: number }).ambient ?? 900),
+        wire: new BrainPlayer(wireBrain, [FLYWIRE_CORPUS, FLYWIRE_TRACK_F, FLYWIRE_TRACK_D, FLYWIRE_TRACK_B, FLYWIRE_TRACK_E, FLYWIRE_TRACK_C], 2.6, ambient.wire),
+        janelia: new BrainPlayer(janeliaBrain, [JANELIA_CORPUS, JANELIA_TRACK_G, JANELIA_TRACK_H, JANELIA_TRACK_I, JANELIA_TRACK_D, JANELIA_TRACK_E, JANELIA_TRACK_B, JANELIA_TRACK_C], 1.5, ambient.janelia),
       };
       // open on the new records — primary corpora rotate back later
       this.players.wire.setTrack(1); // beethoven 5 (idm)

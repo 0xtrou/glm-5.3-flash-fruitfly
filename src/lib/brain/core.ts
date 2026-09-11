@@ -72,6 +72,18 @@ export class LIFBrain {
   revE: Float32Array;
   /** forward-synapse k → reverse-array index of the SAME synapse (plasticity pairing) */
   revPair: Int32Array = new Int32Array(0);
+  /** when false (live playback), substep skips STDP trace bookkeeping entirely —
+   *  pure LIF + delivery, which is what makes a 139k-neuron brain realtime */
+  learning = true;
+  /** edges with nonzero eligibility (training only) — decay visits these, not all E synapses */
+  private activeE: Uint32Array = new Uint32Array(0);
+  private activeECount = 0;
+  private edgeInActive: Uint8Array = new Uint8Array(0);
+  private activeR: Uint32Array = new Uint32Array(0);
+  private activeRCount = 0;
+  private edgeInActiveR: Uint8Array = new Uint8Array(0);
+  /** reverse index j -> forward index k of the same synapse (training only) */
+  private revToFwd: Int32Array = new Int32Array(0);
   inputGroups: number[][];
   motorGroups: number[][];
   private tSub = 0;
@@ -157,6 +169,31 @@ export class LIFBrain {
   }
 
   /**
+   * Build the reverse CSR (revStart/revPre/revE) from the adopted forward
+   * arrays, then pair indices. Needed when topology arrives pre-built
+   * (FlyWire connectome) instead of via the constructor's edge list.
+   */
+  buildReverseCSR() {
+    const E = this.adjPost.length;
+    const counts = new Uint32Array(this.n + 1);
+    for (let k = 0; k < E; k++) counts[this.adjPost[k] + 1]++;
+    for (let i = 0; i < this.n; i++) counts[i + 1] += counts[i];
+    this.revStart = counts.slice(0, this.n + 1);
+    const rcur = counts.slice(0, this.n);
+    this.revPre = new Uint32Array(E);
+    this.revE = new Float32Array(E);
+    for (let i = 0; i < this.n; i++) {
+      const from = this.adjStart[i];
+      const to = this.adjStart[i + 1];
+      for (let k = from; k < to; k++) {
+        const post = this.adjPost[k];
+        this.revPre[rcur[post]++] = i;
+      }
+    }
+    this.rebuildRevPair();
+  }
+
+  /**
    * Map each forward synapse k to its index in the reverse arrays (same
    * pre→post synapse, stored under its post node). Plasticity must pair
    * causal (adjE) and anti-causal (revE) eligibility of the SAME synapse —
@@ -164,6 +201,19 @@ export class LIFBrain {
    * learning signal cancels itself.
    */
   rebuildRevPair() {
+    this.activeE = new Uint32Array(this.adjPost.length);
+    this.activeECount = 0;
+    this.edgeInActive = new Uint8Array(this.adjPost.length);
+    this.activeR = new Uint32Array(Math.max(this.revE.length, 1));
+    this.activeRCount = 0;
+    this.edgeInActiveR = new Uint8Array(Math.max(this.revE.length, 1));
+    this.activeRCount = 0;
+    this.edgeInActiveR = new Uint8Array(this.revE.length);
+    this.revToFwd = new Int32Array(this.revE.length);
+    for (let k = 0; k < this.revPair.length; k++) {
+      const pair = this.revPair[k];
+      if (pair >= 0) this.revToFwd[pair] = k;
+    }
     this.revPair = new Int32Array(this.adjPost.length);
     for (let i = 0; i < this.n; i++) {
       const from = this.adjStart[i];
@@ -225,10 +275,12 @@ export class LIFBrain {
     const spikes: number[] = [];
     const t = this.tSub;
     // decay pairing traces
-    for (let i = 0; i < this.n; i++) {
-      if (this.recent[i] > 0.001) this.recent[i] *= 0.93;
-      if (this.preTrace[i] > 0.001) this.preTrace[i] *= 0.85;
-      if (this.postTrace[i] > 0.001) this.postTrace[i] *= 0.85;
+    if (this.learning) {
+      for (let i = 0; i < this.n; i++) {
+        if (this.recent[i] > 0.001) this.recent[i] *= 0.93;
+        if (this.preTrace[i] > 0.001) this.preTrace[i] *= 0.85;
+        if (this.postTrace[i] > 0.001) this.postTrace[i] *= 0.85;
+      }
     }
     for (let i = 0; i < this.n; i++) {
       if (this.refracUntil[i] > t) continue;
@@ -236,45 +288,97 @@ export class LIFBrain {
       if (this.v[i] >= this.thresh[i]) {
         this.v[i] = -0.2;
         this.refracUntil[i] = t + 2;
-        this.recent[i] = 1;
-        this.lastFire[i] = t;
+        this.lastFire[i] = t; // always — participation + visuals read this
+        if (this.learning) this.recent[i] = 1;
         spikes.push(i);
       }
     }
-    // STDP pairing (on pre spike): causal if post not recently fired
-    for (const pre of spikes) {
-      this.preTrace[pre] = 1;
-      const from = this.adjStart[pre];
-      const to = this.adjStart[pre + 1];
-      for (let k = from; k < to; k++) {
-        this.adjE[k] += 1 - this.postTrace[this.adjPost[k]];
-        const post = this.adjPost[k];
-        if (this.refracUntil[post] <= t) this.v[post] += this.adjW[k] * this.wGain;
+    if (this.learning) {
+      // STDP pairing (on pre spike): causal if post not recently fired
+      for (const pre of spikes) {
+        this.preTrace[pre] = 1;
+        const from = this.adjStart[pre];
+        const to = this.adjStart[pre + 1];
+        for (let k = from; k < to; k++) {
+          this.adjE[k] += 1 - this.postTrace[this.adjPost[k]];
+          this.markActive(k);
+          const post = this.adjPost[k];
+          if (this.refracUntil[post] <= t) this.v[post] += this.adjW[k] * this.wGain;
+        }
       }
-    }
-    // STDP pairing (on post spike): punish inputs that fired too late
-    for (const post of spikes) {
-      this.postTrace[post] = 1;
-      const from = this.revStart[post];
-      const to = this.revStart[post + 1];
-      for (let k = from; k < to; k++) {
-        this.revE[k] += 1.2 * this.preTrace[this.revPre[k]] - 1;
+      // STDP pairing (on post spike): punish inputs that fired too late
+      for (const post of spikes) {
+        this.postTrace[post] = 1;
+        const from = this.revStart[post];
+        const to = this.revStart[post + 1];
+        for (let k = from; k < to; k++) {
+          this.revE[k] += 1.2 * this.preTrace[this.revPre[k]] - 1;
+          if (!this.edgeInActiveR[k]) {
+            if (this.activeRCount === this.activeR.length) {
+              const grown = new Uint32Array(Math.max(1024, this.activeR.length * 2));
+              grown.set(this.activeR.subarray(0, this.activeRCount));
+              this.activeR = grown;
+            }
+            this.edgeInActiveR[k] = 1;
+            this.activeR[this.activeRCount++] = k;
+          }
+        }
+      }
+    } else {
+      // live playback: delivery only
+      for (const pre of spikes) {
+        const from = this.adjStart[pre];
+        const to = this.adjStart[pre + 1];
+        for (let k = from; k < to; k++) {
+          const post = this.adjPost[k];
+          if (this.refracUntil[post] <= t) this.v[post] += this.adjW[k] * this.wGain;
+        }
       }
     }
     this.tSub++;
     return spikes;
   }
 
-  /** decay eligibility traces (call once per musical step) */
+  private markActive(k: number) {
+    if (this.edgeInActive[k]) return;
+    if (this.activeECount === this.activeE.length) {
+      const grown = new Uint32Array(Math.max(1024, this.activeE.length * 2));
+      grown.set(this.activeE.subarray(0, this.activeECount));
+      this.activeE = grown;
+    }
+    this.edgeInActive[k] = 1;
+    this.activeE[this.activeECount++] = k;
+  }
+
+  /** decay eligibility traces (call once per musical step).
+   *  visits only edges with nonzero eligibility — mathematically identical
+   *  to scanning all E synapses (zeros decay to zeros), O(active) instead
+   *  of O(E) so a 15M-synapse connectome trains in minutes. */
   decayTraces(decay = 0.9) {
-    for (let k = 0; k < this.adjE.length; k++) {
-      const e = this.adjE[k];
-      if (e > 0.001 || e < -0.001) this.adjE[k] = e * decay;
+    let w = 0;
+    for (let a = 0; a < this.activeECount; a++) {
+      const k = this.activeE[a];
+      const e = this.adjE[k] * decay;
+      this.adjE[k] = e;
+      const pair = this.revPair[k];
+      if (pair >= 0) this.revE[pair] *= decay;
+      if (e > 0.001 || e < -0.001 || (pair >= 0 && Math.abs(this.revE[pair]) > 0.001)) {
+        this.activeE[w++] = k;
+      } else {
+        this.edgeInActive[k] = 0;
+        if (pair >= 0) this.revE[pair] = 0;
+      }
     }
-    for (let k = 0; k < this.revE.length; k++) {
-      const e = this.revE[k];
-      if (e > 0.001 || e < -0.001) this.revE[k] = e * decay;
+    this.activeECount = w;
+    let wr = 0;
+    for (let a = 0; a < this.activeRCount; a++) {
+      const k = this.activeR[a];
+      const e = this.revE[k] * decay;
+      this.revE[k] = e;
+      if (e > 0.001 || e < -0.001) this.activeR[wr++] = k;
+      else this.edgeInActiveR[k] = 0;
     }
+    this.activeRCount = wr;
   }
 
   /** reward-modulated update. causal pairings ↑, late pairings ↓. */
@@ -292,6 +396,7 @@ export class LIFBrain {
         this.adjE[k] = 0;
         if (pair >= 0) this.revE[pair] = 0;
       }
+
     }
   }
 

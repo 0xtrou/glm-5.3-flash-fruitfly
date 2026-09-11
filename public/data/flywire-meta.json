@@ -1,0 +1,29 @@
+{
+ "built": "2026-09-11T18:04:50Z",
+ "source": "FlyWire FAFB v783 proofread connectome (Dorkenwald et al. 2024, Zenodo 10676866)",
+ "neurons": 139255,
+ "connections": 15071499,
+ "inhibitory_pct": 19.0,
+ "positions_from_input_neuropils_pct": 79.5,
+ "nt_sign_rule": "GABA-dominant -> inhibitory; ACh/Glut/other -> excitatory",
+ "weight_rule": "sign * (0.05 + 0.04*log2(1+syn_count)), clamped [-0.5, 0.5], int8-quantized",
+ "sensory_groups": {
+  "olfactory": 400,
+  "visual": 400,
+  "mblh": 400,
+  "central": 400
+ },
+ "output_groups": [
+  400,
+  400,
+  400,
+  400
+ ],
+ "files": {
+  "topology": "flywire-topology.bin",
+  "weights": [
+   "flywire-weights-wire.bin",
+   "flywire-weights-janelia.bin"
+  ]
+ }
+}

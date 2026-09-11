@@ -20,7 +20,7 @@ const DjGame = dynamic(() => import("@/components/game/dj-game"), {
           <Brain className="h-10 w-10 text-violet-400" />
         </div>
         <p className="mt-3 font-mono text-sm font-bold tracking-widest text-emerald-300/50 uppercase">
-          Waking 140,024 neurons…
+          Waking 139,255 neurons…
         </p>
       </div>
     </div>
@@ -160,8 +160,8 @@ export function FlytapeApp() {
             <span className="text-slate-700">|</span> Synchronized neural activity
           </span>
           <span className="font-mono text-[11px] text-slate-600">
-            ANIMATED CONCEPT | MaleCNS v1.0 (CC BY 4.0) / NeuroMechFly + MuJoCo · The Connectome Crew ·
-            Neuron reconstructions: NeuroMorpho.org (Bock, Williams labs)
+            CONNECTOME | FlyWire FAFB v783 proofread (Dorkenwald et al. 2024, Zenodo 10676866) · 139,255 neurons ·
+            15,071,499 measured connections · NeuroMorpho.org reconstructions (Bock, Williams labs)
           </span>
         </div>
       </footer>

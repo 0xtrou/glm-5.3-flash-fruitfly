@@ -82,7 +82,7 @@ export function Hud() {
               <Play className="ml-1 h-4 w-4 fill-current" />
             </Button>
             <p className="mt-3 text-[11px] text-white/40">
-              96 BPM carrier · R-STDP trained · 140,024-neuron model · click a name tag to poke a fly
+              96 BPM carrier · R-STDP trained · 139,255-neuron FlyWire connectome · click a name tag to poke a fly
             </p>
           </div>
         </div>

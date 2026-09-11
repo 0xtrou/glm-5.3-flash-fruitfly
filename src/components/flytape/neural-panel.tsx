@@ -120,7 +120,7 @@ export function NeuralPanel({ sim, title, accent, drive, fly }: Props) {
           CNS <span className="opacity-40">/</span> {title}
         </h2>
         <span className="flex items-center gap-2">
-          <span className="font-mono text-[9px] text-emerald-300/50">independent sim · NeuroMorpho.org</span>
+          <span className="font-mono text-[9px] text-emerald-300/50">FlyWire FAFB v783 · real connectome</span>
           <button
             onClick={toggleFullscreen}
             className="rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] leading-none text-white/60 transition hover:border-white/40 hover:text-white"
@@ -147,13 +147,13 @@ export function NeuralPanel({ sim, title, accent, drive, fly }: Props) {
         {loading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-[#04100b]/80">
             <span className="font-mono text-[11px] font-bold" style={{ color: accent }}>
-              {fetching ? "FETCHING REAL NEURONS — NeuroMorpho.org" : `LOADING — ${info.neurons || 36} real neurons`}
+              {fetching ? "LOADING FLYWIRE FAFB v783" : `LOADING — ${info.neurons || 139255} real neurons`}
             </span>
             <div className="h-1 w-40 overflow-hidden rounded bg-emerald-950">
               <div className="h-full bg-emerald-400 transition-[width]" style={{ width: `${loadPct}%` }} />
             </div>
             <span className="font-mono text-[9px] text-emerald-300/50">
-              {fetching ? "SWC reconstructions · Bock & Williams labs" : `${info.points || 14000} cable nodes · real neurites`}
+              {fetching ? "proofread connectome · Dorkenwald et al. 2024" : `${info.points || 139255} real neurons`}
             </span>
           </div>
         )}
@@ -182,7 +182,7 @@ export function NeuralPanel({ sim, title, accent, drive, fly }: Props) {
         </div>
         <div className="text-right">
           <span className="font-bold text-slate-200">VNC</span>
-          <span className="ml-1 text-slate-500">{info.real ? "real neurons" : "model"} · {TOTAL_SOMATA.toLocaleString()} model</span>
+          <span className="ml-1 text-slate-500">{info.real ? "real neurons" : "model"} · {TOTAL_SOMATA.toLocaleString()} connectome</span>
         </div>
       </footer>
     </section>
