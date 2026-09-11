@@ -223,12 +223,11 @@ class BrainModeController {
     this.lastBarCounts = { wire: a, janelia: b };
     this.barSpikes.wire = 0;
     this.barSpikes.janelia = 0;
-    const now = performance.now();
-    const max = Math.max(a, b, 1);
-    const sync = Math.min(a, b) / max;
-    void now;
-    void this.lastSync;
-    return sync;
+    // synchrony = both brains actively contributing in the same bar
+    // (they have different trained recall — equality is NOT required,
+    //  joint activity is). ≥ ~20 spikes each → full synchrony.
+    const joint = Math.min(a, b);
+    return Math.min(1, joint / 25);
   }
 
   noteSync() {
