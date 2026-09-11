@@ -69,7 +69,7 @@ export interface BrainNote {
 class BrainPlayer {
   brain: LIFBrain;
   private corpus: typeof FLYWIRE_CORPUS;
-  private tracks: (typeof FLYWIRE_CORPUS)[];
+  tracks: (typeof FLYWIRE_CORPUS)[];
   trackIdx = 0;
 
   setTrack(idx: number) {
@@ -196,6 +196,9 @@ class BrainModeController {
         wire: new BrainPlayer(w, [FLYWIRE_CORPUS, FLYWIRE_TRACK_F, FLYWIRE_TRACK_D, FLYWIRE_TRACK_B, FLYWIRE_TRACK_E, FLYWIRE_TRACK_C], 11, 2.6, (w as { ambient?: number }).ambient ?? 900),
         janelia: new BrainPlayer(j, [JANELIA_CORPUS, JANELIA_TRACK_G, JANELIA_TRACK_H, JANELIA_TRACK_I, JANELIA_TRACK_D, JANELIA_TRACK_E, JANELIA_TRACK_B, JANELIA_TRACK_C], 47, 1.5, (j as { ambient?: number }).ambient ?? 900),
       };
+      // open on the new records — primary corpora rotate back later
+      this.players.wire.setTrack(1); // beethoven 5 (idm)
+      this.players.janelia.setTrack(1); // ode to idm
       this.loaded = true;
     } finally {
       this.loading = false;
@@ -326,8 +329,9 @@ class BrainModeController {
 
   switchTrack(): { wire: string; janelia: string } | null {
     if (!this.players) return null;
-    this.players.wire.setTrack((this.players.wire.trackIdx + 1) % 3);
-    this.players.janelia.setTrack((this.players.janelia.trackIdx + 1) % 3);
+    // cycle the FULL crate — a hardcoded %3 stranded every record after slot 2
+    this.players.wire.setTrack((this.players.wire.trackIdx + 1) % this.players.wire.tracks.length);
+    this.players.janelia.setTrack((this.players.janelia.trackIdx + 1) % this.players.janelia.tracks.length);
     return { wire: this.players.wire.trackStyle, janelia: this.players.janelia.trackStyle };
   }
 
