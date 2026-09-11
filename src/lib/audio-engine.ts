@@ -70,8 +70,8 @@ class BrainPlayer {
     return this.corpus.style;
   }
 
-  constructor(weights: BrainWeights, tracks: (typeof FLYWIRE_CORPUS)[], seed: number, boost = 1) {
-    this.boostFor = boost;
+  constructor(weights: BrainWeights, tracks: (typeof FLYWIRE_CORPUS)[], seed: number, boost = 1, ambient = 900) {
+    this.ambient = ambient;
     this.tracks = tracks;
     this.corpus = tracks[0];
     this.brain = new LIFBrain(
@@ -90,8 +90,8 @@ class BrainPlayer {
     this.brain.refracUntil = new Int32Array(weights.n);
     this.brain.preTrace = new Float32Array(weights.n);
     this.brain.postTrace = new Float32Array(weights.n);
-    // cascade gain — pushes activity deep into the network (80%+ participation)
-    this.brain.wGain = 1.7;
+    // cascade gain from training calibration (fallback 1.7)
+    this.brain.wGain = (weights as { wGain?: number }).wGain ?? 1.7;
     this.brain.leak = 0.1;
     this.brain.inputGroups = weights.inputGroups;
     this.brain.motorGroups = weights.motorGroups;
@@ -99,6 +99,7 @@ class BrainPlayer {
 
   private improvSeed = 7;
   private boostFor = 1;
+  private ambient = 900;
 
   private rand(): number {
     // xorshift — varies per call, gives each pass through the corpus a life of its own
@@ -127,7 +128,7 @@ class BrainPlayer {
         this.brain.stimulate(ch, 12 + ((this.rand() * 10) | 0), 0.85);
       }
       // ambient synaptic hum — recruits the full volume every step
-      this.brain.stimulateAmbient(500, 0.9);
+      this.brain.stimulateAmbient(this.ambient, 0.95);
     }
     return this.brain.stepDetailed();
   }
@@ -139,6 +140,12 @@ class BrainModeController {
   /** spikes this bar per brain — synchrony between them triggers drops */
   private barSpikes = { wire: 0, janelia: 0 };
   private lastBarCounts = { wire: 0, janelia: 0 };
+  /** raw unsmoothed spike counts from the most recent 16th — flies react to THESE */
+  private lastStepSpikes = {
+    wire: { motor: 0, central: 0 },
+    janelia: { motor: 0, central: 0 },
+  };
+  private stepIdx = 0;
   private lastSync = 0;
   private drive: Record<"wire" | "janelia", { motor: number; think: number }> = {
     wire: { motor: 0, think: 0 },
@@ -164,8 +171,8 @@ class BrainModeController {
         fetch(`/data/weights-janelia.json?v=${DATA_VERSION}`).then((r) => r.json()),
       ]);
       this.players = {
-        wire: new BrainPlayer(w, [FLYWIRE_CORPUS, FLYWIRE_TRACK_B, FLYWIRE_TRACK_C], 11, 2.6),
-        janelia: new BrainPlayer(j, [JANELIA_CORPUS, JANELIA_TRACK_B, JANELIA_TRACK_C], 47, 1.5),
+        wire: new BrainPlayer(w, [FLYWIRE_CORPUS, FLYWIRE_TRACK_B, FLYWIRE_TRACK_C], 11, 2.6, (w as { ambient?: number }).ambient ?? 900),
+        janelia: new BrainPlayer(j, [JANELIA_CORPUS, JANELIA_TRACK_B, JANELIA_TRACK_C], 47, 1.5, (j as { ambient?: number }).ambient ?? 900),
       };
       this.loaded = true;
     } finally {
@@ -226,12 +233,31 @@ class BrainModeController {
     this.drive.janelia.motor += (Math.min(1, jOut.motorSpikes / 12) - this.drive.janelia.motor) * k;
     this.drive.janelia.think += (Math.min(1, jOut.centralSpikes / 40) - this.drive.janelia.think) * k;
 
+    // raw per-16th counts — the flies' event reactions key off these
+    this.lastStepSpikes.wire = { motor: wireOut.motorSpikes, central: wireOut.centralSpikes };
+    this.lastStepSpikes.janelia = { motor: jOut.motorSpikes, central: jOut.centralSpikes };
+    this.stepIdx++;
+
     return { notes, kick, snare };
   }
 
   /** live readout of the actual music-generating brain — one per fly */
   flyDrive(fly: "wire" | "janelia"): { motor: number; think: number } {
     return this.drive[fly];
+  }
+
+  /** raw unsmoothed spike output of the most recent 16th, with a step index
+   *  so consumers can detect brain events (new idx = brain just stepped) */
+  spikesNow(): {
+    idx: number;
+    wire: { motor: number; central: number };
+    janelia: { motor: number; central: number };
+  } {
+    return {
+      idx: this.stepIdx,
+      wire: { ...this.lastStepSpikes.wire },
+      janelia: { ...this.lastStepSpikes.janelia },
+    };
   }
 
   lastBarSpikeCounts() {

@@ -61,19 +61,21 @@ function TrackNames() {
 function StatusStrip() {
   const [status, setStatus] = useState({ code: "STANDBY", detail: "", progress: 0 });
   const [telemetry, setTelemetry] = useState("");
-  useEffect(() => {
-    const id = setInterval(() => {
-      const s = useGame.getState();
-      setStatus(statusFor(s, audioEngine.bar));
-      const tn = audioEngine.brains.trackNames();
-      setTelemetry(
-        `FLYWIRE m${Math.round(flywireSim.motorRate() * 100)}/t${Math.round(flywireSim.thinkRate() * 100)}` +
-          ` — JANELIA m${Math.round(janeliaSim.motorRate() * 100)}/t${Math.round(janeliaSim.thinkRate() * 100)}` +
-          (tn ? ` · ♪ ${tn.wire} × ${tn.janelia}` : "")
-      );
-    }, 120);
-    return () => clearInterval(id);
-  }, []);
+    useEffect(() => {
+      const id = setInterval(() => {
+        const s = useGame.getState();
+        setStatus(statusFor(s, audioEngine.bar));
+        const tn = audioEngine.brains.trackNames();
+        const wd = audioEngine.brains.flyDrive("wire");
+        const jd = audioEngine.brains.flyDrive("janelia");
+        setTelemetry(
+          `FLYWIRE m${Math.round(wd.motor * 100)}/t${Math.round(wd.think * 100)}` +
+            ` — JANELIA m${Math.round(jd.motor * 100)}/t${Math.round(jd.think * 100)}` +
+            (tn ? ` · ♪ ${tn.wire} × ${tn.janelia}` : "")
+        );
+      }, 120);
+      return () => clearInterval(id);
+    }, []);
   return (
     <div className="relative flex items-center justify-between gap-4 border-t border-emerald-400/20 bg-[#071510] px-4 py-3">
       <span className="text-lg font-black tracking-wide text-emerald-300 md:text-xl">{status.code}</span>

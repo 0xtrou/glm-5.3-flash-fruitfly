@@ -30,6 +30,7 @@ export const SUBSTEPS_PER_STEP = 4;
 
 export interface Weights {
   n: number;
+  wGain?: number;
   adjStart: number[];
   adjPost: number[];
   adjW: number[];
@@ -78,6 +79,7 @@ export class LIFBrain {
   leak = 0.12;
   thresh = new Float32Array(0);
   recent = new Float32Array(0);
+  ambientCount = 900;
   /** absolute substep of last fire per node */
   lastFire = new Float32Array(0);
 
@@ -138,7 +140,7 @@ export class LIFBrain {
     this.lastFire = new Float32Array(n).fill(-1e9);
     // heterogeneous excitability: thresholds 0.55..0.95 (real neurons vary)
     this.thresh = new Float32Array(n);
-    for (let i = 0; i < n; i++) this.thresh[i] = 0.55 + (i % 7) * 0.055;
+    for (let i = 0; i < n; i++) this.thresh[i] = 0.30 + (i % 7) * 0.03;
     this.inputGroups = opts.inputGroups;
     this.motorGroups = opts.motorGroups;
   }
@@ -150,7 +152,7 @@ export class LIFBrain {
     a ^= a >>> 17;
     a ^= a << 5;
     this.rngState = a >>> 0;
-    return a / 4294967296;
+    return this.rngState / 4294967296;
   }
 
   stimulate(channel: number, count = 14, energy = 0.85) {
@@ -290,6 +292,12 @@ export class LIFBrain {
   }
 
   private partValue = 0;
+  get clock(): number {
+    return this.tSub;
+  }
+  firedWithin(windowSubsteps: number, i: number): boolean {
+    return this.tSub - this.lastFire[i] < windowSubsteps;
+  }
 
   /**
    * fraction of nodes that fired within the last `window` substeps
@@ -308,6 +316,7 @@ export class LIFBrain {
   exportWeights(): Weights {
     return {
       n: this.n,
+      wGain: this.wGain,
       adjStart: Array.from(this.adjStart),
       adjPost: Array.from(this.adjPost),
       adjW: Array.from(this.adjW, (x) => Math.round(x * 1000) / 1000),
@@ -371,6 +380,34 @@ export function buildGraphFromDataset(
   };
   shuffle(brainNodes);
   shuffle(vncNodes);
+  // axonal branching: every node also connects to its 2 nearest neighbours
+  // within the same neuron (real axons/dendrites branch profusely; the sampled
+  // cable graph alone is too sparse to recruit the whole network)
+  const branchExtra: [number, number][] = [];
+  let cur2 = 0;
+  for (const neu of data.neurons) {
+    const nodes: number[] = [];
+    for (let k = 0; k < neu.count; k++) nodes.push(cur2 + k);
+    const pts = nodes.map((gi) => data.points[gi]);
+    for (let a = 0; a < nodes.length; a++) {
+      // 2 nearest neighbours of a
+      const d: { j: number; dist: number }[] = [];
+      for (let b = 0; b < nodes.length; b++) {
+        if (b === a) continue;
+        const dx = pts[a][0] - pts[b][0];
+        const dy = pts[a][1] - pts[b][1];
+        const dz = pts[a][2] - pts[b][2];
+        d.push({ j: b, dist: dx * dx + dy * dy + dz * dz });
+      }
+      d.sort((x, y) => x.dist - y.dist);
+      branchExtra.push([nodes[a], nodes[d[0].j]]);
+      if (d[1]) branchExtra.push([nodes[a], nodes[d[1].j]]);
+    }
+    cur2 += neu.count;
+  }
+  data.edges = [...data.edges, ...branchExtra] as [number, number][];
+  void cur2;
+
   const inputGroups: number[][] = [];
   for (let c = 0; c < opts.channels; c++) {
     inputGroups.push(brainNodes.slice(c * opts.inputPerChannel, (c + 1) * opts.inputPerChannel));

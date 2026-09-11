@@ -45,7 +45,7 @@ function probe(tag: string, weightsFile: string, corpus: typeof FLYWIRE_CORPUS, 
         brain.stimulate(ch, 12 + ((rand() * 10) | 0), 0.85);
       }
     }
-    brain.stimulateAmbient(300, 0.85);
+    brain.stimulateAmbient(5200, 1.05);
     const { counts, motorSpikes, centralSpikes } = brain.stepDetailed();
       brain.stepDetailed();
     motor += motorSpikes;

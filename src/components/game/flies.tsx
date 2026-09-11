@@ -47,6 +47,12 @@ export function Fly({
   const armR = useRef<Group>(null);
   const glassesRef = useRef<Group>(null);
   const eyesRef = useRef<Group>(null);
+  const antennaeRef = useRef<Group>(null);
+  // brain-event animation state — impulses injected by THIS fly's own spikes
+  const hopY = useRef(0);
+  const hopV = useRef(0);
+  const flutter = useRef(0);
+  const lastStepIdx = useRef(-1);
   const nextBlink = useRef(2 + Math.random() * 3);
   const blinkUntil = useRef(0);
   const phase = useGame((s) => s.phase);
@@ -72,7 +78,7 @@ export function Fly({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  useFrame((state) => {
+  useFrame((state, dt) => {
     const t = state.clock.elapsedTime;
     const s = useGame.getState();
     const dropped = s.dropped;
@@ -84,21 +90,37 @@ export function Fly({
     const motor = drive.motor;
     const think = drive.think;
     const contemplating = think > 0.35 && motor < 0.18;
-    const exaggerate = who === 2 ? 1.6 : 1.0; // JANELIA amplifies everything
+    const exaggerate = who === 2 ? 1.6 : 1.0;
+
+    // ---- brain EVENTS, not just levels: each 16th, the fly's own raw spike
+    // counts kick physical impulses. Motor burst → body pop. Central burst →
+    // wing flutter + antenna excitement. Nothing here fires without spikes.
+    const sp = audioEngine.brains.spikesNow();
+    const mine = who === 1 ? sp.wire : sp.janelia;
+    if (sp.idx !== lastStepIdx.current) {
+      lastStepIdx.current = sp.idx;
+      hopV.current += Math.min(1, mine.motor / 12) * 0.16 * exaggerate;
+      flutter.current = Math.min(1.5, flutter.current + mine.central / 60 + (mine.central > 0 ? 0.2 : 0));
+    }
+    flutter.current *= Math.exp(-dt * 5);
+    hopV.current -= hopY.current * 0.35; // spring back to rest
+    hopV.current *= 0.82; // damping
+    hopY.current += hopV.current;
+
     // FLYWIRE bounces ON the beat; JANELIA bounces OFF it (phase-shifted half beat)
     const beatPhase = beat + (who === 2 ? 0.5 : 0);
     const amp = 0.025 + motor * 0.13 * exaggerate + (dropped ? 0.04 : 0);
 
     if (bob.current) {
-      bob.current.position.y = Math.abs(Math.sin(Math.PI * beatPhase)) * amp;
+      bob.current.position.y = Math.abs(Math.sin(Math.PI * beatPhase)) * amp + Math.max(-0.02, hopY.current);
       bob.current.rotation.z = Math.sin(t * (dropped ? 4.2 + motor * 3 : 2.1 + motor * 2)) * (0.02 + motor * 0.05) * side;
       // contemplating → lean in toward the decks
       bob.current.rotation.x = contemplating ? 0.12 : 0;
       if (s.flyPoked === who) {
-        const dt = performance.now() / 1000 - s.pokedAt;
-        if (dt < 0.7) {
-          bob.current.position.y += Math.sin((dt / 0.7) * Math.PI) * 0.35;
-          bob.current.rotation.y = (dt / 0.7) * Math.PI * 2 * side;
+        const dtP = performance.now() / 1000 - s.pokedAt;
+        if (dtP < 0.7) {
+          bob.current.position.y += Math.sin((dtP / 0.7) * Math.PI) * 0.35;
+          bob.current.rotation.y = (dtP / 0.7) * Math.PI * 2 * side;
         } else bob.current.rotation.y = 0;
       } else bob.current.rotation.y = 0;
     }
@@ -109,10 +131,16 @@ export function Fly({
       head.current.rotation.z = Math.sin(t * 0.8 + side) * 0.05 + (contemplating ? 0.18 * side : 0);
     }
 
-    // wings flap at the rate of the fly's own motor cortex
-    const flap = Math.sin(t * (85 + motor * 140 + (dropped ? 40 : 0))) * 0.85;
+    // wings flap at the rate of the fly's own motor cortex, with a burst of
+    // extra flutter while its central brain is actively firing
+    const flap = Math.sin(t * (85 + motor * 140 + flutter.current * 150 + (dropped ? 40 : 0))) * (0.85 + flutter.current * 0.2);
     if (wingL.current) wingL.current.rotation.y = 0.5 + flap;
     if (wingR.current) wingR.current.rotation.y = -0.5 - flap;
+
+    // antennae twitch with thinking — central spikes keep them restless
+    if (antennaeRef.current) {
+      antennaeRef.current.rotation.x = -Math.sin(t * (16 + think * 44)) * (0.08 + think * 0.22 + flutter.current * 0.18);
+    }
 
     // arms throw hands with the fly's own motor bursts (JANELIA flails more)
     if (armR.current) {
@@ -226,13 +254,15 @@ export function Fly({
             ))}
           </group>
 
-          {/* antennae */}
-          {[-1, 1].map((sd) => (
-            <mesh key={sd} position={[sd * 0.04, 0.17, 0.02]} rotation={[0.3, 0, sd * 0.5]}>
-              <cylinderGeometry args={[0.006, 0.006, 0.14, 5]} />
-              <meshStandardMaterial color="#191924" />
-            </mesh>
-          ))}
+          {/* antennae — twitch with central-brain spikes */}
+          <group ref={antennaeRef}>
+            {[-1, 1].map((sd) => (
+              <mesh key={sd} position={[sd * 0.04, 0.17, 0.02]} rotation={[0.3, 0, sd * 0.5]}>
+                <cylinderGeometry args={[0.006, 0.006, 0.14, 5]} />
+                <meshStandardMaterial color="#191924" />
+              </mesh>
+            ))}
+          </group>
 
           {/* headphones */}
           <group>

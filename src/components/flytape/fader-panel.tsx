@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { useGame } from "@/lib/game-store";
 import { Download } from "lucide-react";
 import { flywireSim, janeliaSim } from "@/lib/neural-sim";
+import { audioEngine } from "@/lib/audio-engine";
 
 /**
  * FLY / BRAIN ACTIVITY — FLYTAPE panel.
- * The two operators with live brain bars: magenta = motor (VNC) firing,
- * blue = central-brain firing. Their body animation tracks these same signals.
+ * The two operators with live brain bars straight from the TRAINED networks
+ * (the same spike EMAs that drive their bodies): magenta = motor (VNC) firing,
+ * blue = central-brain firing. Eyes glow with motor activity.
  */
 export function FaderPanel() {
   const phase = useGame((s) => s.phase);
@@ -17,11 +19,13 @@ export function FaderPanel() {
 
   useEffect(() => {
     const id = setInterval(() => {
+      const wire = audioEngine.brains.flyDrive("wire");
+      const janelia = audioEngine.brains.flyDrive("janelia");
       setLevels({
-        wm: flywireSim.motorRate(),
-        wt: flywireSim.thinkRate(),
-        jm: janeliaSim.motorRate(),
-        jt: janeliaSim.thinkRate(),
+        wm: wire.motor,
+        wt: wire.think,
+        jm: janelia.motor,
+        jt: janelia.think,
       });
     }, 250);
     return () => clearInterval(id);
@@ -53,8 +57,8 @@ export function FaderPanel() {
             <svg width="38" height="40" viewBox="0 0 34 34" aria-hidden>
               <ellipse cx="17" cy="22" rx="7" ry="9" fill="#262636" />
               <circle cx="17" cy="10" r="6" fill="#262636" />
-              <circle cx="14" cy="9" r="3.2" fill={f.accent} />
-              <circle cx="20" cy="9" r="3.2" fill={f.accent} />
+              <circle cx="14" cy="9" r="3.2" fill={f.accent} fillOpacity={0.45 + f.m * 0.55} />
+              <circle cx="20" cy="9" r="3.2" fill={f.accent} fillOpacity={0.45 + f.m * 0.55} />
             </svg>
             <div className="flex flex-col gap-1">
               <div className="flex items-end gap-1" title={`motor ${Math.round(f.m * 100)} · think ${Math.round(f.t * 100)}`}>
