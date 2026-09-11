@@ -200,25 +200,6 @@ export function NeuralBrain3D({ sim, accent, drive, onWebgl }: Props) {
     let gravOff = new Float32Array(0);
     let gravVel = new Float32Array(0);
 
-    // cosmic backdrop: starfield outside the globe
-    {
-      const starCount = 500;
-      const sp = new Float32Array(starCount * 3);
-      for (let i = 0; i < starCount; i++) {
-        const th = Math.random() * Math.PI * 2;
-        const ph = Math.acos(2 * Math.random() - 1);
-        const r = 45 + Math.random() * 45;
-        sp[i * 3] = r * Math.sin(ph) * Math.cos(th);
-        sp[i * 3 + 1] = r * Math.cos(ph);
-        sp[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
-      }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.BufferAttribute(sp, 3));
-      const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x8fa8d8, size: 1.8, transparent: true, opacity: 0.4, sizeAttenuation: false }));
-      stars.frustumCulled = false;
-      scene.add(stars);
-    }
-
     const common = {
       transparent: true,
       depthWrite: false,
