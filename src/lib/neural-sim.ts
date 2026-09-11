@@ -327,7 +327,6 @@ export class NeuralSim {
   }
 
   inject(region: Region, energy: number, count = 260) {
-    this.auditEvent(`sensory stimulus → region ${region} (${count} nodes, e=${energy.toFixed(2)})`);
     const pool = this.poolIdx[region];
     if (!pool.length) return;
     const limit = Math.max(1, Math.floor(pool.length * Math.min(1, this.loadProgress)));
