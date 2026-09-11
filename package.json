@@ -12,6 +12,7 @@
     "@base-ui/react": "^1.8.0",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
+    "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
     "lucide-react": "^1.44.0",
@@ -34,6 +35,6 @@
     "tsx": "^4.23.13",
     "typescript": "^5"
   },
-  "description": "FLYTAPE \u2014 two spiking fly brains (real Drosophila morphology, reward-modulated STDP) generating every note of a live set from their own spikes",
+  "description": "FLYTAPE — two spiking fly brains (real Drosophila morphology, reward-modulated STDP) generating every note of a live set from their own spikes",
   "license": "MIT"
 }
