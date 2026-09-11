@@ -120,6 +120,18 @@ class BrainPlayer {
     return corpusPitchAt(this.corpus, cStep, channel);
   }
 
+  /** scored channel (has written pitches) → burst must land on/near the
+   *  score, otherwise between-note bursts drown the written line in noise */
+  nearScore(cStep: number, channel: number): boolean {
+    const on = this.corpus.pitches?.[channel] ? this.corpus.onsets[channel] : undefined;
+    if (!on) return true; // unscored channel (rhythm) — bursts voice freely
+    for (const o of on) {
+      const d = Math.abs(cStep - o);
+      if (d <= 1 || d >= 31) return true; // 32-step wraparound
+    }
+    return false;
+  }
+
   private rand(): number {
     // xorshift — varies per call, gives each pass through the corpus a life of its own
     let a = (this.improvSeed = (this.improvSeed + 0x9e3779b9) | 0);
@@ -227,6 +239,7 @@ class BrainModeController {
     ];
     for (const [ch, count] of wireCounts) {
       if (count < 3) continue; // ambient scatter stays silent — only bursts play
+      if (!this.players.wire.nearScore(ch, cStep)) continue; // scored channels snap to the score
       this.barSpikes.wire += count;
       const m = wireMap[ch] ?? { voice: "hat" as const };
       notes.push({ fly: "wire", channel: ch, voice: m.voice, count, time });
@@ -245,6 +258,7 @@ class BrainModeController {
     ];
     for (const [ch, count] of jCounts) {
       if (count < 3) continue;
+      if (!this.players.janelia.nearScore(ch, cStep)) continue; // scored channels snap to the score
       this.barSpikes.janelia += count;
       const m = jMap[ch] ?? { voice: "hat" as const };
       notes.push({ fly: "janelia", channel: ch, voice: m.voice, count, time });

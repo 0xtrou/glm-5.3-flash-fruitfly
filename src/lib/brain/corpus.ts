@@ -213,7 +213,7 @@ export const FLYWIRE_TRACK_F: Corpus = {
     undefined,
     undefined,
     undefined,
-    [0, 0, 0, 8, 5, 5, 5, 3, 0, 0, 8],
+    [12, 12, 12, 20, 17, 17, 17, 15, 12, 12, 20],
   ],
   scale: CHROMATIC,
 };
