@@ -100,17 +100,16 @@ void main() {
   float disk = smoothstep(0.5, 0.12, d);
   if (disk < 0.01) discard;
   vec3 hue = hue2rgb(vHue);
-  // idle structure: dim silver-blue with a hint of panel tint + neuron hue
-  vec3 dim = mix(vec3(0.16, 0.22, 0.38), uTint * 0.55 + 0.10, 0.30);
-  dim = mix(dim, hue * 0.5 + 0.12, 0.35);
-  // fire ramp: cyan -> mint -> amber -> white as act climbs
   float a = max(vAct, 0.0);
+  // LIVE ONLY: visible while — and only while — spiking; cables carry structure
+  float flash = smoothstep(0.22, 0.9, a) * (0.35 + a * 0.65);
+  if (flash < 0.03) discard;
+  float w = smoothstep(0.15, 0.40, a);
   vec3 fire = mix(vec3(0.30, 0.95, 1.00), vec3(0.35, 1.00, 0.62), smoothstep(0.15, 0.50, a));
   fire = mix(fire, vec3(1.00, 0.72, 0.28), smoothstep(0.50, 0.85, a));
   fire = mix(fire, vec3(1.00, 0.97, 0.86), smoothstep(0.85, 1.25, a));
-  float w = smoothstep(0.15, 0.40, a); // below 0.15 = dim structure only
-  vec3 col = mix(dim, fire * (0.55 + a * 0.32), w);
-  gl_FragColor = vec4(col * disk, disk);
+  vec3 col = mix(hue * 0.4 + 0.15, fire * (0.55 + a * 0.32), w);
+  gl_FragColor = vec4(col * disk * flash, disk * flash);
 }
 `;
 
@@ -143,7 +142,7 @@ void main() {
   float glow = smoothstep(0.08, 0.9, max(vAct, 0.0));
   // quiet soma: dim tinted cell; firing soma: bright, white-cored
   vec3 col = mix(hue * 0.5 + 0.06, vec3(1.0, 0.98, 0.9), glow);
-  gl_FragColor = vec4(col * disk * (0.3 + glow * 0.85), disk);
+  gl_FragColor = vec4(col * disk * (0.22 + glow * 0.9), disk * (0.5 + glow * 0.5));
 }
 `;
 
