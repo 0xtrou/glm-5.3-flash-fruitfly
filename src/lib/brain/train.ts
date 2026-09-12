@@ -43,6 +43,13 @@ export interface TrainOptions {
   humCap?: number;
   humStep?: number;
   participationTarget?: number;
+  /** sensory stimulation strength per onset (scale with input pool size) */
+  stimCount?: number;
+  stimEnergy?: number;
+  /** resume support: periodic weight snapshots so killed runs continue */
+  snapshotEvery?: number;
+  snapshotWrite?: (epoch: number, w: Float32Array) => void;
+  snapshotLoad?: () => { epoch: number; w: Float32Array } | null;
 }
 
 /**
@@ -92,6 +99,17 @@ export function trainExistingBrain(
   const humCap = opts.humCap ?? 2000;
   const humStep = opts.humStep ?? 250;
   const participationTarget = opts.participationTarget ?? 0.8;
+  const stimCount = opts.stimCount ?? 40;
+  const stimEnergy = opts.stimEnergy ?? 1.15;
+  let startEpoch = 0;
+  if (opts.snapshotLoad) {
+    const snap = opts.snapshotLoad();
+    if (snap) {
+      brain.adjW.set(snap.w);
+      startEpoch = snap.epoch;
+      console.log(`  resumed from snapshot at epoch ${snap.epoch}`);
+    }
+  }
   // NOTE: descending grafts deliberately start WEAK (initial 0.06–0.16
   // weights, below the elevated motor threshold). Pre-boosting them let
   // tonic brain chatter fire motor pools continuously — no rhythm. Kept
@@ -126,7 +144,7 @@ export function trainExistingBrain(
     let tp = 0, fp = 0, fn = 0;
     for (let step = 0; step < 32; step++) {
       for (let ch = 0; ch < corpus.channels; ch++) {
-        if (onsetMask[ch][step]) brain.stimulate(ch, 38, 1.12);
+        if (onsetMask[ch][step]) brain.stimulate(ch, Math.round(stimCount * 0.95), stimEnergy * 0.97);
       }
       const counts = brain.step();
       for (let ch = 0; ch < corpus.channels; ch++) {
@@ -144,7 +162,7 @@ export function trainExistingBrain(
   let bestAdjW: Float32Array | null = null;
   let bestEpoch = 0;
 
-  for (let epoch = 0; epoch < epochs; epoch++) {
+  for (let epoch = startEpoch; epoch < epochs; epoch++) {
     teacher = epoch < epochs * teacherDecayFrac
       ? teacherStart - (teacherStart - teacherFloor) * ((epoch / (epochs * teacherDecayFrac)) ** 1.5)
       : teacherFloor;
@@ -152,6 +170,8 @@ export function trainExistingBrain(
     const lrNow = lr * (1 - 0.6 * (epoch / Math.max(1, epochs - 1)));
 
     let tp = 0, fp = 0, fn = 0, rewardSum = 0;
+    let spikesTotalEpoch = 0;
+    const epochT0 = Date.now();
     for (let step = 0; step < STEPS; step++) {
       const cStep = step % 32;
 
@@ -169,6 +189,7 @@ export function trainExistingBrain(
       // step the brain one 16th
       const fired = brain.step(); // Map<channel, count>
       const counts = fired;
+      for (const [, c] of counts) spikesTotalEpoch += c;
 
       // critic + plasticity
       const r = critic.reward(cStep, counts);
@@ -192,6 +213,14 @@ export function trainExistingBrain(
     const f1 = (2 * precision * recall) / Math.max(1e-9, precision + recall);
     const epochMetric = { epoch, f1, inScale: precision, silence: 1 - recall, reward: rewardSum / STEPS };
     metrics.push(epochMetric);
+    if (opts.snapshotEvery && opts.snapshotWrite && epoch > startEpoch && (epoch - startEpoch) % opts.snapshotEvery === 0) {
+      opts.snapshotWrite(epoch, brain.adjW);
+      console.log(`  snapshot written at epoch ${epoch}`);
+    }
+    if (epoch % 10 === 0) {
+      const dt = (Date.now() - epochT0) / 1000;
+      console.log(`  timing epoch ${epoch}: ${dt.toFixed(1)}s (${(dt / STEPS * 1000).toFixed(1)}ms/step) spikes=${spikesTotalEpoch} active=${brain.debugActiveCount()}`);
+    }
     if (epoch % 20 === 0 || epoch === epochs - 1) {
       console.log(`  epoch ${epoch}: f1=${f1.toFixed(3)} precision=${precision.toFixed(3)} recall=${recall.toFixed(3)} reward=${epochMetric.reward.toFixed(3)} teacher=${teacher.toFixed(2)}`);
     }
@@ -219,7 +248,7 @@ export function trainExistingBrain(
     for (let step = 0; step < STEPS; step++) {
       const cStep = step % 32;
       for (let ch = 0; ch < corpus.channels; ch++) {
-        if (onsetMask[ch][cStep]) brain.stimulate(ch, 40, 1.15); // sensory context, no teacher
+        if (onsetMask[ch][cStep]) brain.stimulate(ch, stimCount, stimEnergy); // sensory context, no teacher
       }
       const counts = brain.step();
       const r = critic.reward(cStep, counts);

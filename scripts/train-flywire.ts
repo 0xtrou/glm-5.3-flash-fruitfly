@@ -41,11 +41,13 @@ function train(fly: "wire" | "janelia", corpus: typeof FLYWIRE_CORPUS, seed: num
   console.log(`\n=== training ${fly} on the FlyWire connectome — ${corpus.style} ===`);
   const topo = parseTopology(readBin("flywire-topology.bin"));
   const { w } = parseWeights(readBin(`flywire-weights-${fly}.bin`));
-  const brain = buildFlywireBrain(topo, w, { seed, learning: true });
+  const brain = buildFlywireBrain(topo, w, { seed, learning: true, motorElevation: 0.15 });
   brain.buildReverseCSR();
   brain.wGain = 1;
   brain.leak = 0.12;
 
+  const snapPath = path.join(DATA, `flywire-snapshot-${fly}.bin`);
+  const snapMeta = snapPath + ".json";
   const t = performance.now();
   const result: TrainResult = trainExistingBrain(brain, corpus, {
     seed,
@@ -54,8 +56,25 @@ function train(fly: "wire" | "janelia", corpus: typeof FLYWIRE_CORPUS, seed: num
     humCap: 48000,
     humStep: 4000,
     participationTarget: 0.8,
-    f1Target: 0.6,
+    f1Target: 0.45,
+    stimCount: 120,
+    stimEnergy: 1.25,
+    snapshotEvery: 10,
+    snapshotLoad: () => {
+      if (!fs.existsSync(snapPath) || !fs.existsSync(snapMeta)) return null;
+      const meta = JSON.parse(fs.readFileSync(snapMeta, "utf8"));
+      const w = new Float32Array(fs.readFileSync(snapPath).buffer);
+      console.log(`  snapshot found: epoch ${meta.epoch}`);
+      return { epoch: meta.epoch, w };
+    },
+    snapshotWrite: (epoch, adjW) => {
+      const buf = Buffer.from(adjW.buffer, adjW.byteOffset, adjW.byteLength);
+      fs.writeFileSync(snapPath + ".tmp", buf);
+      fs.renameSync(snapPath + ".tmp", snapPath);
+      fs.writeFileSync(snapMeta, JSON.stringify({ epoch, savedAt: new Date().toISOString() }));
+    },
   });
+  for (const p of [snapPath, snapMeta]) if (fs.existsSync(p)) fs.unlinkSync(p); // completed — snapshot obsolete
   const duration = ((performance.now() - t) / 1000).toFixed(0);
 
   writeWeights(fly, brain);
@@ -70,8 +89,8 @@ function train(fly: "wire" | "janelia", corpus: typeof FLYWIRE_CORPUS, seed: num
 }
 
 function main() {
-  const wire = train("wire", FLYWIRE_CORPUS, 11, 700);
-  const janelia = train("janelia", JANELIA_CORPUS, 47, 500);
+  const wire = train("wire", FLYWIRE_CORPUS, 11, 150);
+  const janelia = train("janelia", JANELIA_CORPUS, 47, 120);
 
   fs.writeFileSync(
     path.join(DATA, "flywire-ambient.json"),

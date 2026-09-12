@@ -26,7 +26,7 @@ export interface BrainBuildOptions {
   inhibitoryRatio?: number;
 }
 
-export const SUBSTEPS_PER_STEP = 4;
+export const SUBSTEPS_PER_STEP = 2;
 
 export interface Weights {
   n: number;
@@ -56,6 +56,10 @@ function mulberry32(seed: number) {
 
 const W_MAX_EXC = 0.4;
 const W_MIN_INH = -0.6;
+/** eligibility subsampling: ≤ this many edges marked per presynaptic spike */
+const ELIGIBILITY_CAP = 4;
+/** hard ceiling on the active eligibility set (decay shrinks it between steps) */
+const ELIGIBILITY_ACTIVE_CAP = 65_536;
 
 export class LIFBrain {
   n: number;
@@ -81,9 +85,14 @@ export class LIFBrain {
   private edgeInActive: Uint8Array = new Uint8Array(0);
   private activeR: Uint32Array = new Uint32Array(0);
   private activeRCount = 0;
+  private activeRCursor = 0;
   private edgeInActiveR: Uint8Array = new Uint8Array(0);
   /** reverse index j -> forward index k of the same synapse (training only) */
   private revToFwd: Int32Array = new Int32Array(0);
+  /** diagnostics: current active eligibility set size */
+  debugActiveCount(): number {
+    return this.activeECount + this.activeRCount;
+  }
   inputGroups: number[][];
   motorGroups: number[][];
   private tSub = 0;
@@ -201,10 +210,10 @@ export class LIFBrain {
    * learning signal cancels itself.
    */
   rebuildRevPair() {
-    this.activeE = new Uint32Array(this.adjPost.length);
+    this.activeE = new Uint32Array(Math.min(this.adjPost.length, ELIGIBILITY_ACTIVE_CAP));
     this.activeECount = 0;
     this.edgeInActive = new Uint8Array(this.adjPost.length);
-    this.activeR = new Uint32Array(Math.max(this.revE.length, 1));
+    this.activeR = new Uint32Array(Math.min(Math.max(this.revE.length, 1), ELIGIBILITY_ACTIVE_CAP));
     this.activeRCount = 0;
     this.edgeInActiveR = new Uint8Array(Math.max(this.revE.length, 1));
     this.activeRCount = 0;
@@ -284,7 +293,9 @@ export class LIFBrain {
     }
     for (let i = 0; i < this.n; i++) {
       if (this.refracUntil[i] > t) continue;
-      this.v[i] += -this.v[i] * this.leak;
+      const vi = this.v[i];
+      if (vi < 0.01) continue; // idle — integration would leave it at ~0
+      this.v[i] = vi + -vi * this.leak;
       if (this.v[i] >= this.thresh[i]) {
         this.v[i] = -0.2;
         this.refracUntil[i] = t + 2;
@@ -294,16 +305,24 @@ export class LIFBrain {
       }
     }
     if (this.learning) {
-      // STDP pairing (on pre spike): causal if post not recently fired
+      // STDP pairing (on pre spike): causal if post not recently fired.
+      // Eligibility is subsampled on high-degree neurons — at most
+      // ELIGIBILITY_CAP edges per presynaptic spike (deterministic stride),
+      // and marking pauses when the active set hits its cap. Real
+      // neuromodulation is sparse too; declared in PHILOSOPHY.md.
       for (const pre of spikes) {
         this.preTrace[pre] = 1;
         const from = this.adjStart[pre];
         const to = this.adjStart[pre + 1];
+        const deg = to - from;
+        const stride = deg > ELIGIBILITY_CAP ? Math.ceil(deg / ELIGIBILITY_CAP) : 1;
         for (let k = from; k < to; k++) {
-          this.adjE[k] += 1 - this.postTrace[this.adjPost[k]];
-          this.markActive(k);
           const post = this.adjPost[k];
           if (this.refracUntil[post] <= t) this.v[post] += this.adjW[k] * this.wGain;
+          if ((k - from) % stride === 0 && this.activeECount < ELIGIBILITY_ACTIVE_CAP) {
+            this.adjE[k] += 1 - this.postTrace[post];
+            this.markActive(k);
+          }
         }
       }
       // STDP pairing (on post spike): punish inputs that fired too late
@@ -314,14 +333,16 @@ export class LIFBrain {
         for (let k = from; k < to; k++) {
           this.revE[k] += 1.2 * this.preTrace[this.revPre[k]] - 1;
           if (!this.edgeInActiveR[k]) {
-            if (this.activeRCount === this.activeR.length) {
-              const grown = new Uint32Array(Math.max(1024, this.activeR.length * 2));
-              grown.set(this.activeR.subarray(0, this.activeRCount));
-              this.activeR = grown;
+            if (this.activeRCount < this.activeR.length) {
+              this.activeR[this.activeRCount++] = k;
+            } else {
+              const victim = this.activeRCursor;
+              this.edgeInActiveR[this.activeR[victim]] = 0;
+              this.activeR[victim] = k;
+              this.activeRCursor = (victim + 1) % this.activeR.length;
             }
-            this.edgeInActiveR[k] = 1;
-            this.activeR[this.activeRCount++] = k;
           }
+          this.edgeInActiveR[k] = this.edgeInActiveR[k] || 0;
         }
       }
     } else {
@@ -339,22 +360,28 @@ export class LIFBrain {
     return spikes;
   }
 
+  private activeECursor = 0;
   private markActive(k: number) {
     if (this.edgeInActive[k]) return;
-    if (this.activeECount === this.activeE.length) {
-      const grown = new Uint32Array(Math.max(1024, this.activeE.length * 2));
-      grown.set(this.activeE.subarray(0, this.activeECount));
-      this.activeE = grown;
+    if (this.activeECount < this.activeE.length) {
+      this.activeE[this.activeECount++] = k;
+    } else {
+      // ring eviction: the oldest eligibility mark yields to the freshest
+      const victim = this.activeECursor;
+      this.edgeInActive[this.activeE[victim]] = 0;
+      this.activeE[victim] = k;
+      this.activeECursor = (victim + 1) % this.activeE.length;
     }
     this.edgeInActive[k] = 1;
-    this.activeE[this.activeECount++] = k;
   }
 
   /** decay eligibility traces (call once per musical step).
    *  visits only edges with nonzero eligibility — mathematically identical
    *  to scanning all E synapses (zeros decay to zeros), O(active) instead
-   *  of O(E) so a 15M-synapse connectome trains in minutes. */
-  decayTraces(decay = 0.9) {
+   *  of O(E). Default 0.75: eligibility lives ~16 steps, keeping the active
+   *  set bounded on hub-heavy real connectomes (0.9 let it grow for ~65
+   *  steps and ground training to a halt; the window is a hyperparameter). */
+  decayTraces(decay = 0.6) {
     let w = 0;
     for (let a = 0; a < this.activeECount; a++) {
       const k = this.activeE[a];

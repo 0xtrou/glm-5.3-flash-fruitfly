@@ -7,54 +7,36 @@ step sequencer. Every sound begins as voltage in a simulated neuron.
 
 ## It starts with the dataset
 
-Everything here exists because of one dataset: 70 reconstructed neurons of
-*Drosophila melanogaster*, downloaded from
-[NeuroMorpho.org](https://neuromorpho.org) in CNG SWC format. They come from
-the electron-microscopy labs of Bock (brain) and Williams (ventral nerve
-cord), 36 neurons for the first fly and 34 for the second — 27,069 traced
-cable points in total.
+Everything here exists because of one dataset: the **FlyWire FAFB v783
+proofread connectome** of an adult female *Drosophila melanogaster*
+(Dorkenwald et al., *Nature* 2024; data on
+[Zenodo, record 10676866](https://zenodo.org/records/10676866)) — 139,255
+proofread neurons and the complete wiring between them. FLYTAPE loads all
+of it:
 
-These are not point clouds. Each neuron is a strict tree: exactly one root,
-every other node has a single parent, and no edge crosses a neuron boundary
-(we checked — 0 violations across 27,000 points). That tree structure is the
-whole foundation. When a spike travels from node to parent node, it is
-moving along a neurite that an actual fly grew.
+- **139,255 neurons** — every proofread neuron of the adult fly brain, one
+  leaky-integrate-and-fire unit each. Nothing sampled, nothing skipped.
+- **15,071,499 directed connections** — the measured chemical synapses
+  between proofread neurons (16.8M rows aggregated per pair). No modeled
+  wiring anywhere: every edge in the simulation exists in the connectome.
+- **Real excitatory/inhibitory signs** — each connection's sign comes from
+  its measured neurotransmitter mix (GABA-dominant connections inhibit, ~
+  19% of the total; the rest excite).
+- **Real positions** — 79.5% of neurons sit at the input-weighted centroid
+  of the FlyWire neuropils that actually innervate them (JRC2018-relative
+  layout); the rest are openly marked as unplaced.
+- **Real sensory inputs** — the four stimulus channels drive the actual
+  olfactory (antennal lobe), visual (optic lobe), mushroom-body/lateral-horn,
+  and central-complex populations, ranked by measured input synapses.
+- **Real output pools** — each channel's motor pool is that population's
+  downstream convergence targets *in the connectome*, i.e. neurons the
+  sensory channel demonstrably drives. The first attempt used the highest-
+  output neurons instead; with the teacher off the music died, because the
+  chosen pools had no measured path from the senses. The wiring decides.
 
-All 70 neurons were re-verified against the NeuroMorpho API live: names,
-species, and archives match one-for-one. They are CATMAID reconstructions
-from the FIB-SEM whole-adult-brain electron-microscopy volume published as
-Zheng et al., Cell 2018 (doi 10.1016/j.cell.2018.06.019) — the same imaging
-volume the FlyWire project later segmented. Sample entry: `block_203840`,
-Bock archive, an adult GABAergic anterior paired lateral (APL) neuron of
-the mushroom body, Canton S strain. One caveat: every neuron in the bundle
-carries exactly 400 cable points, a uniform resample — the original EM
-traces hold more nodes, but NeuroMorpho's bulk file endpoints no longer
-serve that archive, so the full-resolution counts are browsable only on
-their site.
-
-The two files, `public/data/fly-neurons-wire.json` and
-`public/data/fly-neurons-janelia.json`, are disjoint neuron sets — two flies
-that share no anatomy. Whatever differences emerge between DJ FLYWIRE and
-MC JANELIA come from their different neurons and their different upbringing,
-never from different code.
-
-## From cables to a brain
-
-Each cable point becomes a leaky integrate-and-fire neuron: accumulate
-voltage, fire above threshold, reset, refractory period. The cable edges
-become synapses, both directions, ~18% of them inhibitory. Two structural
-additions are grafted on, both declared rather than hidden:
-
-- **Branch grafts** — each node also connects to its two nearest neighbours.
-  The sampled cables alone are too sparse to recruit a whole network.
-- **Descending lines** — real fly CNS routes brain-to-VNC signals through
-  descending axons that cable reconstructions don't capture. Each sensory
-  channel is wired to its own motor pool, so a beat has a path to survive.
-  An earlier version wired these at random and the flies produced noise;
-  the labeled lines are what made rhythm possible at all.
-
-Motor pools get a +0.35 threshold elevation: background noise can never fire
-them. Only coordinated input — which training then sharpens — crosses.
+Both DJs are the same real brain. DJ FLYWIRE and MC JANELIA differ only in
+trained synapse weights and in the corpora they grew up on — same anatomy,
+different upbringing, no configuration.
 
 ## Growing up: training
 
@@ -108,21 +90,22 @@ sound.
 
 | A real fly | FLYTAPE |
 |---|---|
-| ~140,000 neurons in the central brain (FlyWire 783) | 70 reconstructions, simulated as 27,069 nodes across two brains |
-| 51.7 million synapses | ~96,000 modeled synapses per brain — about 280x fewer than one fly, split between two DJs |
-| Neurons with dozens of ion channels and dendritic computation | one voltage number, a threshold between 0.30 and 0.83, a two-substep refractory period |
+| 139,255 neurons in the connectome (FlyWire 783) | the same 139,255 neurons — all of them, one LIF unit each |
+| ~130 million measured synapses | 15.07M of them, wired exactly as measured (proofread connections, per-pair aggregated) |
+| Neurons with ion channels and dendritic computation | one voltage number, a threshold between 0.30 and 0.83, a two-substep refractory period |
 | Dopamine delivered by dedicated neuromodulatory neurons | a single float in [-1, 1], multiplied into synapse weights |
-| Spikes last ~1 ms; the STDP window is ~20 ms | substeps last ~39 ms at 96 BPM — the whole brain runs ~40x slower than real time, and the flies do not mind |
-| Learns in a few trials | 500 epochs of 64 steps, about 45 seconds of a laptop CPU |
+| Spikes last ~1 ms; the STDP window is ~20 ms | substeps last ~39 ms at 96 BPM — the brain runs ~40x slower than real time, and the flies do not mind |
+| Learns in a few trials | hundreds of epochs over a 32-step corpus, tens of minutes of laptop CPU |
 | A whole brain runs on microwatts | one browser tab |
-| Sings by vibrating its wings at ~200 Hz — courtship, not music | eight records, two of them Beethoven IDM cuts |
-| Lives about 60 days | two JSON files, roughly 7 MB |
+| Sings by vibrating its wings at ~200 Hz — courtship, not music | ten records, two of them Beethoven IDM cuts |
+| Lives about 60 days | two binary weight files, 15 MB each |
 
-The reconstructions are real; everything grafted on top is declared, not
-hidden: cable edges are genuine, inter-neuron synapses and branch grafts
-and descending lines are modeled structure documented in the code, and
-thresholds, weights, and hum are modeled parameters. The training report
-ships whatever those parameters produce, unedited.
+The connectome is real — every connection, sign, position, sensory pool,
+and output pool is measured data, provenance in
+`public/data/flywire-meta.json`. What remains modeled: the LIF abstraction
+(one voltage per neuron, no ion channels), the weight magnitudes derived
+from synapse counts, the training that adjusts them, and the thresholds.
+The training report ships whatever those produce, unedited.
 
 ## Running it
 

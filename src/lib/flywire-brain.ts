@@ -90,7 +90,7 @@ export async function loadFlywireWeights(fly: "wire" | "janelia", version: numbe
 export function buildFlywireBrain(
   topo: FlywireTopology,
   w: Float32Array,
-  opts: { seed: number; learning: boolean; leak?: number },
+  opts: { seed: number; learning: boolean; leak?: number; motorElevation?: number },
 ): LIFBrain {
   const brain = new LIFBrain(
     { points: new Array(topo.n).fill(0) as [number, number, number][], edges: [], neuronCount: topo.n },
@@ -112,8 +112,9 @@ export function buildFlywireBrain(
   brain.lastFire = new Float32Array(topo.n).fill(-1e9);
   brain.thresh = new Float32Array(topo.n);
   for (let i = 0; i < topo.n; i++) brain.thresh[i] = 0.30 + (i % 7) * 0.03;
+  const elevation = opts.motorElevation ?? 0.35;
   for (const pool of topo.motor) {
-    for (const i of pool) brain.thresh[i] += 0.35;
+    for (const i of pool) brain.thresh[i] += elevation;
   }
   brain.wGain = 1;
   brain.leak = opts.leak ?? 0.1;

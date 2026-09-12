@@ -187,21 +187,30 @@ def main():
         sensory.append(sorted(ranked.tolist()))
         print(f"sensory ch{ch} ({cls}): {len(ranked)} neurons")
 
-    # ---- output groups: highest-output neurons, descending-neuron proxies ----
-    out_total = np.zeros(n, dtype=np.float64)
-    npil_pre = ft.read_table(f"{DATA}/per_neuron_neuropil_count_pre_783.feather")
-    rpre = rank[np.searchsorted(sorted_ids, npil_pre.column("pre_pt_root_id").to_numpy())]
-    keep_pre = rpre < n
-    out_cnt = npil_pre.column("count").to_numpy().astype(np.float64)[keep_pre]
-    np.add.at(out_total, rpre[keep_pre], out_cnt)
-    desc_bias = np.zeros(n, dtype=np.float64)
-    for code in OUTPUT:
-        mask = npil_pre.column("neuropil").to_numpy()[keep_pre] == code
-        np.add.at(desc_bias, rpre[keep_pre][mask], out_cnt[keep_pre][mask])
-    sensory_set = set(i for g in sensory for i in g)
-    ranked_out = [i for i in np.argsort(-desc_bias) if i not in sensory_set][:1600]
-    motor = [sorted(ranked_out[c * 400:(c + 1) * 400]) for c in range(4)]
-    print("output pools:", [len(m) for m in motor])
+    # ---- output groups: real downstream convergence targets ----
+    # For each sensory population, collect every connection originating from
+    # its members and rank posts by received synapse count. These are the
+    # neurons the sensory channels ACTUALLY drive in the measured connectome
+    # — labeled lines that exist in the data, not in our imagination.
+    con_pre = pre  # valid-edge pre indices (post-filter)
+    con_post = post
+    con_syn = syn
+    motor = []
+    claimed = set(i for g in sensory for i in g)
+    for ch, pool in enumerate(sensory):
+        pool_set = np.zeros(n, dtype=bool)
+        pool_set[np.asarray(pool, dtype=np.int64)] = True
+        from_pool = pool_set[con_pre]
+        down = np.zeros(n, dtype=np.float64)
+        np.add.at(down, con_post[from_pool], con_syn[from_pool])
+        down[list(claimed)] = 0  # keep pools disjoint across channels
+        down[np.asarray(pool, dtype=np.int64)] = 0
+        top = np.argsort(-down)[:400]
+        top = [int(i) for i in top if down[i] > 0][:400]
+        claimed.update(top)
+        motor.append(sorted(top))
+        print(f"output pool {ch}: {len(motor[-1])} real downstream targets, top synapse weight {down[top[0]] if top else 0:.0f}")
+    del con_pre, con_post, con_syn
 
     # ---- write topology bin ----
     magic = np.uint32(0x464C5957)  # 'FLYW'
