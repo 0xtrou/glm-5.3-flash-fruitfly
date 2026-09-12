@@ -158,11 +158,31 @@ def main():
         psum[r] += c[:, None] * np.asarray(cpos, dtype=np.float64)[None, :]
         wsum[r] += c
         mapped += int(mask.sum())
+    # place each neuron INSIDE its dominant real neuropil's ellipsoid (not at
+    # the centroid — centroids collapse thousands of neurons into 40 dots).
+    # Unplaced neurons go to the VNC column below the brain, matching the
+    # classic organ layout. Same data, organ-shaped.
     has = wsum > 0
-    pos[has] = (psum[has] / wsum[has, None]).astype(np.float32)
-    miss = np.flatnonzero(~has)
-    pos[miss] = (rng.random((len(miss), 3)) - 0.5).astype(np.float32)  # documented: unplaced neurons
-    print(f"positions: {np.sum(has)}/{n} from real input neuropils ({100*np.mean(has):.1f}%); {len(miss)} seeded")
+    code_by_neuron = {}
+    for code in NEUROPIL_POS:
+        mask = npil == code
+        r = rid[mask]
+        code_by_neuron.update({int(x): code for x in r})
+    from collections import Counter
+    plc = Counter()
+    for i in range(n):
+        code = code_by_neuron.get(i)
+        if code is None or code not in NEUROPIL_POS:
+            # unplaced -> VNC column below the brain
+            pos[i] = ((rng.random() - 0.5) * 0.16, -0.24 - rng.random() * 0.24, (rng.random() - 0.5) * 0.12)
+            continue
+        cx, cy, cz = NEUROPIL_POS[code]
+        ux, uy, uz = rng.random() * 2 - 1, rng.random() * 2 - 1, rng.random() * 2 - 1
+        pos[i] = (cx + ux * 0.11, cy + uy * 0.10, cz + uz * 0.09)
+        plc[code] += 1
+    print(f"positions: {n - plc.get('__na__', 0)}/{n} placed inside real neuropils; unplaced -> VNC column")
+    top = plc.most_common(6)
+    print("  busiest neuropils:", top)
 
     # ---- sensory input groups: real populations, top 400 by input synapses ----
     # classify each neuron by dominant input neuropil class
