@@ -1,10 +1,12 @@
 "use client";
 
-import { Brain, Bug, Volume2, VolumeX, Zap, Play, AudioLines } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Brain, Bug, Volume2, VolumeX, Zap, Play, AudioLines, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useGame } from "@/lib/game-store";
 import { audioEngine } from "@/lib/audio-engine";
+import { flywireSim, janeliaSim } from "@/lib/neural-sim";
 
 export function Hud() {
   const phase = useGame((s) => s.phase);
@@ -12,6 +14,19 @@ export function Hud() {
   const muted = useGame((s) => s.muted);
   const start = useGame((s) => s.start);
   const toggleMute = useGame((s) => s.toggleMute);
+
+  // assets-ready gate: brains built in the worker AND both CNS panels adopted
+  // the real connectome. Beats start only after everything is in memory.
+  const [assetsReady, setAssetsReady] = useState(false);
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if (audioEngine.brains.ready && flywireSim.realData && janeliaSim.realData) {
+        setAssetsReady(true);
+        clearInterval(iv);
+      }
+    }, 120);
+    return () => clearInterval(iv);
+  }, []);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 select-none">
@@ -70,17 +85,28 @@ export function Hud() {
                 <b className="text-white">drop</b> fires on its own.
               </p>
             </div>
-            <Button
-              size="lg"
-              className="mt-6 h-11 w-full bg-gradient-to-r from-red-500 via-fuchsia-500 to-violet-500 text-base font-black text-white hover:opacity-90"
-              onClick={() => {
-                audioEngine.start();
-                start();
-              }}
-            >
-              START THE SET
-              <Play className="ml-1 h-4 w-4 fill-current" />
-            </Button>
+            {assetsReady ? (
+              <Button
+                size="lg"
+                className="mt-6 h-11 w-full bg-gradient-to-r from-red-500 via-fuchsia-500 to-violet-500 text-base font-black text-white hover:opacity-90"
+                onClick={() => {
+                  audioEngine.start();
+                  start();
+                }}
+              >
+                START THE SET
+                <Play className="ml-1 h-4 w-4 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                disabled
+                className="mt-6 h-11 w-full cursor-wait bg-white/10 text-base font-black text-white/60"
+              >
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                LOADING BRAIN ASSETS…
+              </Button>
+            )}
             <p className="mt-3 text-[11px] text-white/40">
               96 BPM carrier · R-STDP trained · 139,255-neuron FlyWire connectome · click a name tag to poke a fly
             </p>

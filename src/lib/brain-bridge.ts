@@ -57,15 +57,28 @@ class BrainBridge {
   private pendingStep: ((r: StepResult) => void) | null = null;
   private pendingBar: ((r: BarMsg) => void) | null = null;
   private pendingSwitch: ((names: Record<"wire" | "janelia", string>) => void) | null = null;
-  private pendingReady: (() => void) | null = null;
+  private readyResolvers: (() => void)[] = [];
   private fireSubs: ((s: FireSnap, fly: "wire" | "janelia") => void)[] = [];
+
+  /** resolves once both brains are built and stepping is possible */
+  readyPromise(): Promise<void> {
+    if (this.ready) return Promise.resolve();
+    if (this.error) return Promise.reject(new Error(this.error));
+    return new Promise((resolve, reject) => {
+      this.readyResolvers.push(resolve);
+      this.errorRejectors.push(reject);
+    });
+  }
+  private errorRejectors: ((e: Error) => void)[] = [];
 
   start(): void {
     if (this.worker) return;
     this.worker = new Worker(new URL("./brain-worker.ts", import.meta.url), { type: "module" });
     this.worker.onmessage = (ev: MessageEvent) => this.onMessage(ev.data);
     this.worker.onerror = (e) => {
-      this.error = String(e.message ?? "worker error");
+      this.error = String((e as ErrorEvent).message ?? "worker error");
+      for (const r of this.errorRejectors) r(new Error(this.error));
+      this.errorRejectors = [];
     };
     this.worker.postMessage({ type: "load" });
   }
@@ -75,11 +88,7 @@ class BrainBridge {
   }
 
   whenReady(fn: () => void): void {
-    if (this.ready) {
-      fn();
-      return;
-    }
-    this.pendingReady = fn;
+    void this.readyPromise().then(fn);
   }
 
   private onMessage(msg: Record<string, unknown> & { type: string }): void {
@@ -93,9 +102,9 @@ class BrainBridge {
           adjStart: msg.adjStart as Uint32Array,
           edgeSample: msg.edgeSample as Uint32Array,
         };
-        const fn = this.pendingReady;
-        this.pendingReady = null;
-        fn?.();
+        for (const r of this.readyResolvers) r();
+        this.readyResolvers = [];
+        this.errorRejectors = [];
         break;
       }
       case "step": {
@@ -136,6 +145,8 @@ class BrainBridge {
       }
       case "error": {
         this.error = String(msg.message);
+        for (const r of this.errorRejectors) r(new Error(this.error));
+        this.errorRejectors = [];
         break;
       }
     }

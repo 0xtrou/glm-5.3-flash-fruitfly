@@ -331,10 +331,16 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
         ey1 = -Infinity,
         ez0 = Infinity,
         ez1 = -Infinity;
+      let bad = 0;
       for (let i = 0; i < n; i++) {
-        const X = px(i);
-        const Y = py(i);
-        const Z = pz(i);
+        let X = px(i);
+        let Y = py(i);
+        let Z = pz(i);
+        if (!Number.isFinite(X) || !Number.isFinite(Y) || !Number.isFinite(Z)) {
+          bad++;
+          if (bad === 1) console.warn(`NeuralBrain3D: ${fly} node ${i} had non-finite position — zeroed`);
+          X = 0; Y = 0; Z = 0;
+        }
         positions[i * 3] = X;
         positions[i * 3 + 1] = Y;
         positions[i * 3 + 2] = Z;
@@ -360,7 +366,9 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
       nodeGeo.setAttribute("aHue", new THREE.BufferAttribute(aHue, 1));
       nodeGeo.setAttribute("aDeg", new THREE.BufferAttribute(aDeg, 1));
       nodeGeo.setAttribute("aAct", new THREE.BufferAttribute(aAct, 1));
+      nodeGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), CONTENT_SPAN * 4);
       pointsObj.geometry = nodeGeo;
+      if (bad > 0) console.warn(`NeuralBrain3D: ${fly} — ${bad} non-finite positions zeroed total`);
 
       // real cable edges — the skeleton that fuses the points into one organ
       lineGeo.dispose();
@@ -380,6 +388,7 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
         }
         lineGeo = new THREE.BufferGeometry();
         lineGeo.setAttribute("position", new THREE.BufferAttribute(lp, 3));
+        lineGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), CONTENT_SPAN * 4);
         edgeGlowArr = new Float32Array(edges.length / 2);
         const lc = new Float32Array(edges.length * 3);
         for (let v = 0; v < edges.length; v++) {
@@ -414,6 +423,7 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
       }
       somaGeo = new THREE.BufferGeometry();
       somaGeo.setAttribute("position", new THREE.BufferAttribute(sp, 3));
+      somaGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), CONTENT_SPAN * 4);
       somaGeo.setAttribute("aHue", new THREE.BufferAttribute(sh, 1));
       somaGeo.setAttribute("aAct", new THREE.BufferAttribute(sa, 1));
       somaGeo.setDrawRange(0, sc);
