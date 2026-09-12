@@ -509,9 +509,9 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
       const act = sim.act;
       const actAttr = nodeGeo.getAttribute("aAct") as THREE.BufferAttribute;
       const arr = actAttr.array as Float32Array;
-      const brain = audioEngine.brains.brainOf(flyRef.current);
-      const lastFire = brain?.lastFire;
-      const tSub = brain?.clock ?? 0;
+      const snap = audioEngine.brains.lastFireSnap(flyRef.current);
+      const lastFire = snap?.lastFire;
+      const tSub = snap?.tSub ?? 0;
       const edges = sim.edgeList;
       let hot = 0;
       for (let i = 0; i < nodeCount; i++) {

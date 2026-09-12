@@ -1,4 +1,3 @@
-import type { FlywireTopology } from "./flywire-brain";
 
 /**
  * Fly CNS spiking network — FLYTAPE neural activity feed.
@@ -186,17 +185,17 @@ export class NeuralSim {
    * Region for coloring comes from real JRC2018 position (lateral = optic
    * lobe, low = VNC output territory, else central brain).
    */
-  adoptFlywire(topo: FlywireTopology) {
-    const n = topo.n;
+  adoptFlywire(vt: { n: number; positions: Float32Array; adjStart: Uint32Array; edgeSample: Uint32Array }) {
+    const n = vt.n;
     this.x = new Float32Array(n);
     this.y = new Float32Array(n);
     this.z = new Float32Array(n);
     this.region = new Uint8Array(n);
     const pools: number[][] = [[], [], []];
     for (let i = 0; i < n; i++) {
-      const x = topo.positions[i * 3];
-      const y = topo.positions[i * 3 + 1];
-      const z = topo.positions[i * 3 + 2];
+      const x = vt.positions[i * 3];
+      const y = vt.positions[i * 3 + 1];
+      const z = vt.positions[i * 3 + 2];
       this.x[i] = x;
       this.y[i] = y;
       this.z[i] = z;
@@ -208,29 +207,25 @@ export class NeuralSim {
       pools[r].push(i);
     }
     this.poolIdx = pools;
-    this.positionsReal = new Float32Array(topo.positions);
-    // skeleton lines: a deterministic sample of real connections (~60k)
-    const lineCap = 60000;
-    const stride = Math.max(1, Math.floor(topo.edgeCount / lineCap));
-    const undirected: number[] = [];
-    for (let pre = 0; pre < n; pre += 1) {
-      const from = topo.adjStart[pre];
-      const to = topo.adjStart[pre + 1];
-      if (to > from) {
-        const post = topo.adjPost[from];
-        if ((pre * 7 + post) % stride === 0 && undirected.length < lineCap * 2) {
-          undirected.push(pre, post);
-        }
-      }
-    }
-    this.edgeList = new Uint32Array(undirected);
-    this.adjStartFly = topo.adjStart;
-    this.adjPostFly = topo.adjPost;
-    // node degree from real out-degree (thicker trunks = bigger hubs)
+    this.positionsReal = new Float32Array(vt.positions);
+    // skeleton lines: a sampled subset of real connections
+    this.edgeList = new Uint32Array(vt.edgeSample);
+    this.adjStartFly = vt.adjStart;
+    // pulse targets ride the sampled real connections (CSR-lite)
+    const pulseCounts = new Uint32Array(n + 1);
+    for (let k = 0; k < vt.edgeSample.length; k += 2) pulseCounts[vt.edgeSample[k] + 1]++;
+    for (let i = 0; i < n; i++) pulseCounts[i + 1] += pulseCounts[i];
+    this.adjPostFly = new Uint32Array(vt.edgeSample.length);
+    const pc = pulseCounts.slice(0, n);
+    for (let k = 0; k < vt.edgeSample.length; k += 2) this.adjPostFly[pc[vt.edgeSample[k]++]++] = vt.edgeSample[k + 1];
+    this.adjStartFly = pulseCounts.slice(0, n + 1);
+    // node degree from the sampled real connections
     this.deg = new Uint32Array(n);
-    for (let pre = 0; pre < n; pre++) {
-      const d = topo.adjStart[pre + 1] - topo.adjStart[pre];
-      this.deg[pre] = Math.min(15, d);
+    for (let k = 0; k < vt.edgeSample.length; k += 2) {
+      const a = vt.edgeSample[k];
+      const b = vt.edgeSample[k + 1];
+      if (this.deg[a] < 15) this.deg[a]++;
+      if (this.deg[b] < 15) this.deg[b]++;
     }
     this.nodeHue = new Float32Array(n);
     for (let i = 0; i < n; i++) this.nodeHue[i] = (i * 0.61803398875) % 1;
@@ -247,7 +242,7 @@ export class NeuralSim {
       archives: ["FlyWire FAFB v783"],
       source: "FlyWire FAFB v783 proofread connectome (Dorkenwald et al. 2024)",
     };
-    this.auditEvent(`dataset loaded — ${n} real neurons, ${n} nodes`);
+    this.auditEvent(`dataset loaded — ${n} real neurons (FlyWire FAFB v783)`);
   }
 
   /** Fetch this fly's real morphologies and swap the atlas out from under the panel. */
@@ -451,12 +446,15 @@ export const flywireSim = new NeuralSim("/data/fly-neurons-wire.json");
 export const janeliaSim = new NeuralSim("/data/fly-neurons-janelia.json");
 export function bootNeuralSims() {
   void (async () => {
-    const { loadFlywireTopology } = await import("./flywire-brain");
-    const topo = await loadFlywireTopology(DATA_VERSION);
-    flywireSim.adoptFlywire(topo);
-    janeliaSim.adoptFlywire(topo);
+    const { brainBridge } = await import("./brain-bridge");
+    brainBridge.start();
+    await new Promise<void>((resolve) => brainBridge.whenReady(resolve));
+    const vt = brainBridge.visualTopo;
+    if (!vt) throw new Error("no visual topology");
+    flywireSim.adoptFlywire(vt);
+    janeliaSim.adoptFlywire(vt);
   })().catch(() => {
-    // bundles unreachable — panels keep the procedural atlas, honestly labeled
+    // worker unreachable — panels keep the procedural atlas, honestly labeled
     flywireSim.realData = false;
     janeliaSim.realData = false;
   });

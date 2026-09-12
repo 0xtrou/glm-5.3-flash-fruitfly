@@ -1,5 +1,4 @@
-import { LIFBrain } from "./brain/core";
-import { buildFlywireBrain, loadFlywireTopology, loadFlywireWeights, type FlywireTopology } from "./flywire-brain";
+import { brainBridge } from "./brain-bridge";
 import {
   FLYWIRE_CORPUS,
   FLYWIRE_TRACK_B,
@@ -67,216 +66,42 @@ export interface BrainNote {
   time: number;
 }
 
-class BrainPlayer {
-  brain: LIFBrain;
-  private corpus: typeof FLYWIRE_CORPUS;
-  tracks: (typeof FLYWIRE_CORPUS)[];
-  trackIdx = 0;
-
-  setTrack(idx: number) {
-    this.trackIdx = idx % this.tracks.length;
-    this.corpus = this.tracks[this.trackIdx];
-  }
-
-  get trackStyle(): string {
-    return this.corpus.style;
-  }
-
-  constructor(brain: LIFBrain, tracks: (typeof FLYWIRE_CORPUS)[], boost = 1, ambient = 900) {
-    this.boostFor = boost;
-    this.ambient = ambient;
-    this.tracks = tracks;
-    this.corpus = tracks[0];
-    this.brain = brain;
-    brain.learning = false; // live playback: delivery only, no plasticity
-  }
-
-  private improvSeed = 7;
-  private boostFor = 1;
-  private ambient = 900;
-
-  /** pitch for a channel-step on the track currently on the decks */
-  pitchFor(cStep: number, channel: number): number {
-    return corpusPitchAt(this.corpus, cStep, channel);
-  }
-
-  /** scored channel (has written pitches) → burst must land on/near the
-   *  score, otherwise between-note bursts drown the written line in noise */
-  nearScore(cStep: number, channel: number): boolean {
-    const on = this.corpus.pitches?.[channel] ? this.corpus.onsets[channel] : undefined;
-    if (!on) return true; // unscored channel (rhythm) — bursts voice freely
-    for (const o of on) {
-      const d = Math.abs(cStep - o);
-      if (d <= 1 || d >= 31) return true; // 32-step wraparound
-    }
-    return false;
-  }
-
-  private rand(): number {
-    // xorshift — varies per call, gives each pass through the corpus a life of its own
-    let a = (this.improvSeed = (this.improvSeed + 0x9e3779b9) | 0);
-    a = Math.imul(a ^ (a >>> 16), 0x45d9f3b);
-    a = Math.imul(a ^ (a >>> 16), 0x45d9f3b);
-    return ((a ^ (a >>> 16)) >>> 0) / 4294967296;
-  }
-
-  /**
-   * One musical 16th. Sensory context = learned corpus + live variation:
-   * onsets fire with ~88% probability, 10% gain an extra spur, and every
-   * ~16 steps a random channel gets a spontaneous stimulus. The brain's
-   * learned wiring turns that stream into its own evolving beat — never
-   * the same loop twice.
-   */
-  step(cStep: number): { counts: Map<number, number>; motorSpikes: number; centralSpikes: number } {
-    for (let ch = 0; ch < this.corpus.channels; ch++) {
-      const on = this.corpus.onsets[ch].includes(cStep);
-      const boost = this.boostFor;
-      if (on && this.rand() < 0.97) {
-        const extra = this.rand() < 0.1 ? 14 : 0;
-        this.brain.stimulate(ch, Math.round((38 + ((this.rand() * 12) | 0) + extra) * boost), 1.18 + this.rand() * 0.12);
-      } else if (!on && this.rand() < 0.12) {
-        // spontaneous off-grid thought
-        this.brain.stimulate(ch, 12 + ((this.rand() * 10) | 0), 0.85);
-      }
-      // ambient synaptic hum — SUB-threshold (0.18 < min threshold 0.30):
-      // background alone never fires a node, it only biases excitability.
-      // Above-threshold hum saturated the network (8k motor spikes/bar, sync
-      // pinned 1.00 — the brains seized instead of played).
-      this.brain.stimulateAmbient(this.ambient, 0.18);
-    }
-    return this.brain.stepDetailed();
-  }
-}
-
 class BrainModeController {
   loaded = false;
   loading = false;
-  /** spikes this bar per brain — synchrony between them triggers drops */
-  private barSpikes = { wire: 0, janelia: 0 };
+  /** voiced-burst bookkeeping happens worker-side; these are the last bar's counts */
   private lastBarCounts = { wire: 0, janelia: 0 };
-  /** raw unsmoothed spike counts from the most recent 16th — flies react to THESE */
-  private lastStepSpikes = {
-    wire: { motor: 0, central: 0 },
-    janelia: { motor: 0, central: 0 },
-  };
-  private stepIdx = 0;
-  private lastSync = 0;
-  private drive: Record<"wire" | "janelia", { motor: number; think: number }> = {
-    wire: { motor: 0, think: 0 },
-    janelia: { motor: 0, think: 0 },
-  };
-  private players: { wire: BrainPlayer; janelia: BrainPlayer } | null = null;
-  private topology: FlywireTopology | null = null;
+  private pendingSwitch = false;
 
   get ready(): boolean {
-    return this.loaded;
+    return brainBridge.ready;
   }
 
   /** preload without enabling — called on app mount so START is instant */
   preload(): void {
-    void this.load();
+    brainBridge.start();
+    brainBridge.whenReady(() => {
+      this.loaded = true;
+    });
   }
 
   async load(): Promise<void> {
-    if (this.loaded || this.loading) return;
-    this.loading = true;
-    try {
-      // both DJs fly the SAME real brain — the FlyWire FAFB v783 proofread
-      // connectome — with independently trained weights and different corpora
-      const [topo, ambient, ww, wj] = await Promise.all([
-        loadFlywireTopology(DATA_VERSION),
-        fetch(`/data/flywire-ambient.json?v=${DATA_VERSION}`).then((r) => r.json()) as Promise<{ wire: number; janelia: number }>,
-        loadFlywireWeights("wire", DATA_VERSION),
-        loadFlywireWeights("janelia", DATA_VERSION),
-      ]);
-      this.topology = topo;
-      const wireBrain = buildFlywireBrain(topo, ww, { seed: 11, learning: false });
-      const janeliaBrain = buildFlywireBrain(topo, wj, { seed: 47, learning: false });
-      this.players = {
-        wire: new BrainPlayer(wireBrain, [FLYWIRE_CORPUS, FLYWIRE_TRACK_F, FLYWIRE_TRACK_D, FLYWIRE_TRACK_B, FLYWIRE_TRACK_E, FLYWIRE_TRACK_C], 2.6, ambient.wire),
-        janelia: new BrainPlayer(janeliaBrain, [JANELIA_CORPUS, JANELIA_TRACK_G, JANELIA_TRACK_H, JANELIA_TRACK_I, JANELIA_TRACK_D, JANELIA_TRACK_E, JANELIA_TRACK_B, JANELIA_TRACK_C], 1.5, ambient.janelia),
-      };
-      // open on the new records — primary corpora rotate back later
-      this.players.wire.setTrack(1); // beethoven 5 (idm)
-      this.players.janelia.setTrack(1); // ode to idm
-      this.loaded = true;
-    } finally {
-      this.loading = false;
-    }
-  }
-
-  /**
-   * The only music generator in the system.
-   * FLYWIRE = rhythm section (kick, snare, hat, bass).
-   * JANELIA = melodies + percussion color (lead, ghost snare, hat accent, soft kick).
-   */
-  step(cStep: number, time: number): { notes: BrainNote[]; kick: boolean; snare: boolean } {
-    const notes: BrainNote[] = [];
-    let kick = false;
-    let snare = false;
-    if (!this.players) return { notes, kick, snare };
-
-    // FLYWIRE — the rhythm keeper
-    const wireOut = this.players.wire.step(cStep);
-    const wireCounts = wireOut.counts;
-    const wireMap: { voice: BrainNote["voice"] }[] = [
-      { voice: "kick" },
-      { voice: "snare" },
-      { voice: "hat" },
-      { voice: "bass" },
-    ];
-    for (const [ch, count] of wireCounts) {
-      if (count < 3) continue; // ambient scatter stays silent — only bursts play
-      if (!this.players.wire.nearScore(ch, cStep)) continue; // scored channels snap to the score
-      this.barSpikes.wire += count;
-      const m = wireMap[ch] ?? { voice: "hat" as const };
-      notes.push({ fly: "wire", channel: ch, voice: m.voice, count, time });
-      if (ch === 0) kick = true;
-      if (ch === 1) snare = true;
-    }
-
-    // MC JANELIA — melodies + hype percussion
-    const jOut = this.players.janelia.step(cStep);
-    const jCounts = jOut.counts;
-    const jMap: { voice: BrainNote["voice"] }[] = [
-      { voice: "ghost-kick" },
-      { voice: "ghost-snare" },
-      { voice: "hat" },
-      { voice: "bass" },
-    ];
-    for (const [ch, count] of jCounts) {
-      if (count < 3) continue;
-      if (!this.players.janelia.nearScore(ch, cStep)) continue; // scored channels snap to the score
-      this.barSpikes.janelia += count;
-      const m = jMap[ch] ?? { voice: "hat" as const };
-      notes.push({ fly: "janelia", channel: ch, voice: m.voice, count, time });
-      if (ch === 1) snare = true;
-    }
-
-    // EMA of each brain's real spike output — flies animate from THESE
-    const k = 0.18;
-    this.drive.wire.motor += (Math.min(1, wireOut.motorSpikes / 12) - this.drive.wire.motor) * k;
-    this.drive.wire.think += (Math.min(1, wireOut.centralSpikes / 40) - this.drive.wire.think) * k;
-    this.drive.janelia.motor += (Math.min(1, jOut.motorSpikes / 12) - this.drive.janelia.motor) * k;
-    this.drive.janelia.think += (Math.min(1, jOut.centralSpikes / 40) - this.drive.janelia.think) * k;
-
-    // raw per-16th counts — the flies' event reactions key off these
-    this.lastStepSpikes.wire = { motor: wireOut.motorSpikes, central: wireOut.centralSpikes };
-    this.lastStepSpikes.janelia = { motor: jOut.motorSpikes, central: jOut.centralSpikes };
-    this.stepIdx++;
-
-    return { notes, kick, snare };
+    this.preload();
+    if (brainBridge.error) throw new Error(brainBridge.error);
+    await new Promise<void>((resolve) => {
+      const check = () => (brainBridge.ready ? resolve() : setTimeout(check, 50));
+      check();
+    });
   }
 
   /** live readout of the actual music-generating brain — one per fly */
   flyDrive(fly: "wire" | "janelia"): { motor: number; think: number } {
-    return this.drive[fly];
+    return brainBridge.flyDrive(fly);
   }
 
-  /** the live trained brain of a fly — the 3D visual reads its real
-   *  per-node lastFire timestamps to render utilization */
-  brainOf(fly: "wire" | "janelia"): LIFBrain | null {
-    return this.players?.[fly].brain ?? null;
+  /** lastFire snapshots from the worker — the 3D renders read utilization */
+  lastFireSnap(fly: "wire" | "janelia"): { lastFire: Float32Array; tSub: number } | null {
+    return brainBridge.fireSnap(fly);
   }
 
   /** raw unsmoothed spike output of the most recent 16th, with a step index
@@ -286,67 +111,35 @@ class BrainModeController {
     wire: { motor: number; central: number };
     janelia: { motor: number; central: number };
   } {
-    return {
-      idx: this.stepIdx,
-      wire: { ...this.lastStepSpikes.wire },
-      janelia: { ...this.lastStepSpikes.janelia },
-    };
+    return brainBridge.spikesNow();
   }
 
   lastBarSpikeCounts() {
     return this.lastBarCounts;
   }
 
-  /** fraction of nodes (0..1) that fired within the last `windowSubsteps` —
-   *  per brain; utilization the audit log reports each bar */
-  participation(windowSubsteps = 256): { wire: number; janelia: number } {
-    if (!this.players) return { wire: 0, janelia: 0 };
-    return {
-      wire: this.players.wire.brain.participation(windowSubsteps),
-      janelia: this.players.janelia.brain.participation(windowSubsteps),
-    };
+  /** fraction of nodes that fired within the last 4 bars — worker-computed */
+  participation(_windowSubsteps = 256): { wire: number; janelia: number } {
+    return brainBridge.participation();
   }
 
   trackNames(): { wire: string; janelia: string } | null {
-    if (!this.players) return null;
-    return { wire: this.players.wire.trackStyle, janelia: this.players.janelia.trackStyle };
+    return brainBridge.ready ? brainBridge.trackNames : null;
   }
 
-  /**
-   * Motor synchrony 0..1 between the two brains — the biological drop trigger.
-   * Called at bar boundaries; resets the per-bar counters.
-   */
+  /** per-bar synchrony now computed worker-side; main thread only reads */
   synchrony(): number {
-    const a = this.barSpikes.wire;
-    const b = this.barSpikes.janelia;
-    this.lastBarCounts = { wire: a, janelia: b };
-    this.barSpikes.wire = 0;
-    this.barSpikes.janelia = 0;
-    // synchrony = both brains actively contributing in the same bar
-    // (they have different trained recall — equality is NOT required,
-    //  joint activity is). ≥ ~20 spikes each → full synchrony.
-    const joint = Math.min(a, b);
-    return Math.min(1, joint / 25);
+    this.lastBarCounts = { ...brainBridge.barCounts };
+    return brainBridge.sync;
   }
 
   switchTrack(): { wire: string; janelia: string } | null {
-    if (!this.players) return null;
-    // cycle the FULL crate — a hardcoded %3 stranded every record after slot 2
-    this.players.wire.setTrack((this.players.wire.trackIdx + 1) % this.players.wire.tracks.length);
-    this.players.janelia.setTrack((this.players.janelia.trackIdx + 1) % this.players.janelia.tracks.length);
-    return { wire: this.players.wire.trackStyle, janelia: this.players.janelia.trackStyle };
+    brainBridge.switchTrack();
+    return brainBridge.ready ? brainBridge.trackNames : null;
   }
 
-  noteSync() {
-    this.lastSync = performance.now();
-  }
-
-  pitchFor(note: BrainNote, cStep: number): number {
-    const player = note.fly === "wire" ? this.players?.wire : this.players?.janelia;
-    if (!player) return PENTATONIC[0];
-    const semi = player.pitchFor(cStep, note.channel);
-    // MC JANELIA is the melodic brain — her leads sit an octave up
-    return note.fly === "janelia" ? semi + 12 : semi;
+  requestStep(cStep: number): Promise<import("./brain-bridge").StepResult> {
+    return brainBridge.requestStep(cStep);
   }
 }
 
@@ -542,38 +335,44 @@ class AudioEngine {
     }
 
     // ---- THE MUSIC: brain spikes, nothing else ----
+    // stepping happens in the worker; voices schedule from the response,
+    // targeted at this step's audio time (response arrives inside the
+    // 150 ms lookahead; late responses play immediately instead)
     if (this.brains.ready) {
-      const { notes, kick, snare } = this.brains.step(step % 32, t);
-      if (kick) {
-        this.visualEvents.push({ time: t, type: "kick" });
-      }
-      if (snare) {
-        this.visualEvents.push({ time: t, type: "snare" });
-      }
-      for (const n of notes) {
-        switch (n.voice) {
-          case "kick":
-            this.kick(t, 0.9);
-            break;
-          case "ghost-kick":
-            this.kick(t, 0.4);
-            break;
-          case "snare":
-            this.snare(t, 0.16);
-            break;
-          case "ghost-snare":
-            this.snare(t, 0.08);
-            break;
-          case "hat":
-            this.hat(t, false, n.fly === "janelia" ? 0.09 : 0.12);
-            break;
-          case "bass": {
-            const semi = this.brains.pitchFor(n, step % 32);
-            this.bass(t, semi, n.fly === "wire", n.fly === "wire" ? 0.24 : 0.16);
-            break;
+      this.brains
+        .requestStep(step % 32)
+        .then((res) => {
+          if (res.kick) {
+            this.visualEvents.push({ time: t, type: "kick" });
           }
-        }
-      }
+          if (res.snare) {
+            this.visualEvents.push({ time: t, type: "snare" });
+          }
+          for (const n of res.notes) {
+            switch (n.voice) {
+              case "kick":
+                this.kick(t, 0.9);
+                break;
+              case "ghost-kick":
+                this.kick(t, 0.4);
+                break;
+              case "snare":
+                this.snare(t, 0.16);
+                break;
+              case "ghost-snare":
+                this.snare(t, 0.08);
+                break;
+              case "hat":
+                this.hat(t, false, n.fly === "janelia" ? 0.09 : 0.12);
+                break;
+              case "bass": {
+                this.bass(t, n.pitch, n.fly === "wire", n.fly === "wire" ? 0.24 : 0.16);
+                break;
+              }
+            }
+          }
+        })
+        .catch(() => {});
     }
   }
 
