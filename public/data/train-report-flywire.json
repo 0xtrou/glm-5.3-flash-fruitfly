@@ -1,0 +1,44 @@
+{
+ "janelia": {
+  "fly": "janelia",
+  "trainedAt": "2026-09-12T14:43:39.010Z",
+  "durationSeconds": 4099,
+  "style": "syncopated breaks",
+  "epochs": 40,
+  "finalTeacher": 0.02,
+  "generationF1": 0.36942675159235666,
+  "onsetSelectivity": 1.2034029889370512,
+  "divergence": 0.7734375,
+  "uniqueBars": 1,
+  "participation": 0.9999928189293024,
+  "ambientCount": 4000,
+  "wGain": 1.4,
+  "bestCheckpoint": {
+   "epoch": 49,
+   "genF1": 0.36942675159235666
+  },
+  "passed": false,
+  "durationMs": 4099027
+ },
+ "wire": {
+  "fly": "wire",
+  "trainedAt": "2026-09-12T14:58:33.437Z",
+  "durationSeconds": 4996,
+  "style": "straight 4/4 techno",
+  "epochs": 5,
+  "finalTeacher": 0.02,
+  "generationF1": 0.40993788819875776,
+  "onsetSelectivity": 1.3294714474569949,
+  "divergence": 0.7421875,
+  "uniqueBars": 1,
+  "participation": 0.9999928189293024,
+  "ambientCount": 4000,
+  "wGain": 1.4,
+  "bestCheckpoint": {
+   "epoch": 94,
+   "genF1": 0.40993788819875776
+  },
+  "passed": false,
+  "durationMs": 4996411
+ }
+}

@@ -90,7 +90,7 @@ function train(fly: "wire" | "janelia", corpus: typeof FLYWIRE_CORPUS, seed: num
 
 function main() {
   const fly = ((process.env.FLY ?? process.argv[2]) ?? "both") as "wire" | "janelia" | "both";
-  const epochs: Record<string, number> = { wire: 150, janelia: 120 };
+  const epochs: Record<string, number> = { wire: 85, janelia: 40 };
   const runs = fly === "both" ? (["wire", "janelia"] as const) : ([fly] as const);
 
   const results: Record<string, { report: any; ambient: number }> = {};
