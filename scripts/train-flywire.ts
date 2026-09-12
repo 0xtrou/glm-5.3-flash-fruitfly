@@ -59,7 +59,7 @@ function train(fly: "wire" | "janelia", corpus: typeof FLYWIRE_CORPUS, seed: num
     f1Target: 0.45,
     stimCount: 120,
     stimEnergy: 1.25,
-    snapshotEvery: 10,
+    snapshotEvery: 5,
     snapshotLoad: () => {
       if (!fs.existsSync(snapPath) || !fs.existsSync(snapMeta)) return null;
       const meta = JSON.parse(fs.readFileSync(snapMeta, "utf8"));
@@ -89,19 +89,29 @@ function train(fly: "wire" | "janelia", corpus: typeof FLYWIRE_CORPUS, seed: num
 }
 
 function main() {
-  const wire = train("wire", FLYWIRE_CORPUS, 11, 150);
-  const janelia = train("janelia", JANELIA_CORPUS, 47, 120);
+  const fly = ((process.env.FLY ?? process.argv[2]) ?? "both") as "wire" | "janelia" | "both";
+  const epochs: Record<string, number> = { wire: 150, janelia: 120 };
+  const runs = fly === "both" ? (["wire", "janelia"] as const) : ([fly] as const);
 
-  fs.writeFileSync(
-    path.join(DATA, "flywire-ambient.json"),
-    JSON.stringify({ wire: wire.ambient, janelia: janelia.ambient }, null, 1)
-  );
-  fs.writeFileSync(
-    path.join(DATA, "train-report-flywire.json"),
-    JSON.stringify({ wire: wire.report, janelia: janelia.report }, null, 1)
-  );
-  console.log("\nDONE → flywire-weights-*.bin + flywire-ambient.json + train-report-flywire.json");
-  console.log("bump DATA_VERSION in src/lib/neural-sim.ts, then redeploy");
+  const results: Record<string, { report: any; ambient: number }> = {};
+  for (const f of runs) {
+    results[f] = train(f, f === "wire" ? FLYWIRE_CORPUS : JANELIA_CORPUS, f === "wire" ? 11 : 47, epochs[f]);
+  }
+
+  // merge reports/ambient with whatever the other fly already wrote
+  const reportPath = path.join(DATA, "train-report-flywire.json");
+  let merged: Record<string, unknown> = {};
+  if (fs.existsSync(reportPath)) merged = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+  const ambientPath = path.join(DATA, "flywire-ambient.json");
+  let ambient: Record<string, number> = { wire: 4000, janelia: 4000 };
+  if (fs.existsSync(ambientPath)) ambient = JSON.parse(fs.readFileSync(ambientPath, "utf8"));
+  for (const f of runs) {
+    merged[f] = results[f].report;
+    ambient[f] = results[f].report.ambientCount;
+  }
+  fs.writeFileSync(reportPath, JSON.stringify(merged, null, 1));
+  fs.writeFileSync(ambientPath, JSON.stringify(ambient, null, 1));
+  console.log(`\nDONE ${runs.join("+")} → weights + flywire-ambient.json + train-report-flywire.json`);
 }
 
 main();
