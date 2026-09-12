@@ -94,17 +94,21 @@ function corpusOf(p: Player): Corpus {
   return p.crate.tracks[p.corpusIdx];
 }
 
-function makePlayer(fly: Fly, w: Float32Array, topoData: FlywireTopology, trainedAmbient: number): Player {
+function makePlayer(
+  fly: Fly,
+  w: Float32Array,
+  topoData: FlywireTopology,
+  trained: { ambient: number; wGain: number },
+): Player {
   const crate = CRATES[fly];
   const brain = buildFlywireBrain(topoData, w, { seed: crate.seed, learning: false, motorElevation: 0.15 });
-  brain.wGain = 1;
-  brain.leak = 0.12;
+
   const p: Player = {
     brain,
     crate,
     corpusIdx: 1, // the set opens on the IDM record
     boost: crate.boost,
-    ambient: trainedAmbient,
+    ambient: trained.ambient,
     improv: 7,
     barSpikes: 0,
     lastStep: { motor: 0, central: 0 },
@@ -178,12 +182,12 @@ function participation(p: Player): number {
 async function load(): Promise<FlywireTopology> {
   const [topoData, ambient, ww, wj] = await Promise.all([
     parseTopology((await (await fetch(`/data/flywire-topology.bin?v=${DATA_VERSION}`)).arrayBuffer())),
-    (await (await fetch(`/data/flywire-ambient.json?v=${DATA_VERSION}`)).json()) as Record<Fly, number>,
+    (await (await fetch(`/data/flywire-ambient.json?v=${DATA_VERSION}`)).json()) as Record<Fly, { ambient: number; wGain: number }>,
     parseWeights((await (await fetch(`/data/flywire-weights-wire.bin?v=${DATA_VERSION}`)).arrayBuffer())).w,
     parseWeights((await (await fetch(`/data/flywire-weights-janelia.bin?v=${DATA_VERSION}`)).arrayBuffer())).w,
   ]);
-  players.wire = makePlayer("wire", ww, topoData, ambient.wire ?? 4000);
-  players.janelia = makePlayer("janelia", wj, topoData, ambient.janelia ?? 4000);
+  players.wire = makePlayer("wire", ww, topoData, ambient.wire ?? { ambient: 4000, wGain: 1.7 });
+  players.janelia = makePlayer("janelia", wj, topoData, ambient.janelia ?? { ambient: 4000, wGain: 1.7 });
   return topoData;
 }
 
