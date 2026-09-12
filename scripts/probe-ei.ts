@@ -10,7 +10,8 @@ const topo = parseTopology(fs.readFileSync("public/data/flywire-topology.bin").b
 const { w } = parseWeights(fs.readFileSync("public/data/flywire-weights-wire.bin").buffer as ArrayBuffer);
 
 // which edges are inhibitory: sign encoded in int8
-const inhMask = w < 0;
+const inhMask = new Uint8Array(w.length);
+for (let k = 0; k < w.length; k++) inhMask[k] = w[k] < 0 ? 1 : 0;
 
 function run(mult: number) {
   const w2 = new Float32Array(w.length);
