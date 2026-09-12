@@ -28,6 +28,17 @@ export interface BrainBuildOptions {
 
 export const SUBSTEPS_PER_STEP = 2;
 
+/**
+ * CASCADE GUARD — the trained whole-brain network is metastable: a local
+ * burst can recruit the entire connectome within a few substeps (an
+ * epileptic cascade). Real tissue fatigues; we model the same relief.
+ * When one substep recruits more than CASCADE_CEILING neurons, every
+ * neuron in that wave gets an extended refractory pause — the runaway
+ * recruitment collapses, ordinary sparse firing is untouched.
+ */
+const CASCADE_CEILING = 1500; // ~1% of the connectome in one substep
+const CASCADE_REFRACT = 45;   // substeps of enforced quiet (~2.6s at 128 BPM)
+
 export interface Weights {
   n: number;
   wGain?: number;
@@ -60,6 +71,13 @@ const W_MIN_INH = -0.6;
 const ELIGIBILITY_CAP = 4;
 /** hard ceiling on the active eligibility set (decay shrinks it between steps) */
 const ELIGIBILITY_ACTIVE_CAP = 65_536;
+/** synaptic release probability: real chemical synapses fail to release most
+ *  spikes (typical release probability 0.1-0.5). Delivery subsampling is
+ *  therefore MORE realistic than all-or-nothing delivery, and it bounds
+ *  cascade cost on hub neurons (up to 9,617 out-edges in this connectome). */
+const RELEASE_P = 0.25;
+/** per-spike delivery cap (deterministic stride on top of release probability) */
+const DELIVERY_CAP = 64;
 
 export class LIFBrain {
   n: number;
@@ -79,6 +97,22 @@ export class LIFBrain {
   /** when false (live playback), substep skips STDP trace bookkeeping entirely —
    *  pure LIF + delivery, which is what makes a 139k-neuron brain realtime */
   learning = true;
+  /** sparse integration: only neurons with voltage are integrated. Skipping
+   *  idle neurons is mathematically exact (integrating 0 yields 0) and turns
+   *  the per-substep cost from O(n) to O(active). */
+  private activeIdx: Uint32Array = new Uint32Array(1024);
+  private activeCount = 0;
+  private inActive: Uint8Array = new Uint8Array(0);
+  private ensureActive(i: number) {
+    if (this.inActive[i]) return;
+    if (this.activeCount === this.activeIdx.length) {
+      const grown = new Uint32Array(this.activeIdx.length * 2);
+      grown.set(this.activeIdx.subarray(0, this.activeCount));
+      this.activeIdx = grown;
+    }
+    this.inActive[i] = 1;
+    this.activeIdx[this.activeCount++] = i;
+  }
   /** edges with nonzero eligibility (training only) — decay visits these, not all E synapses */
   private activeE: Uint32Array = new Uint32Array(0);
   private activeECount = 0;
@@ -258,6 +292,7 @@ export class LIFBrain {
     for (let k = 0; k < count; k++) {
       const i = g[(this.rand() * g.length) | 0];
       this.v[i] += energy;
+      if (this.v[i] > 0.005) this.ensureActive(i);
     }
   }
 
@@ -275,6 +310,7 @@ export class LIFBrain {
       const i = g[(this.rand() * g.length) | 0];
       if (this.refracUntil[i] <= this.tSub) {
         this.v[i] = 1.2; // above threshold → fires next substep
+        this.ensureActive(i);
       }
     }
   }
@@ -291,19 +327,30 @@ export class LIFBrain {
         if (this.postTrace[i] > 0.001) this.postTrace[i] *= 0.85;
       }
     }
-    for (let i = 0; i < this.n; i++) {
-      if (this.refracUntil[i] > t) continue;
+    let w = 0;
+    for (let a = 0; a < this.activeCount; a++) {
+      const i = this.activeIdx[a];
+      if (this.refracUntil[i] > t) {
+        this.activeIdx[w++] = i; // refractory — still charged, keep
+        continue;
+      }
       const vi = this.v[i];
-      if (vi < 0.01) continue; // idle — integration would leave it at ~0
-      this.v[i] = vi + -vi * this.leak;
+      this.v[i] = vi - vi * this.leak;
       if (this.v[i] >= this.thresh[i]) {
         this.v[i] = -0.2;
         this.refracUntil[i] = t + 2;
         this.lastFire[i] = t; // always — participation + visuals read this
         if (this.learning) this.recent[i] = 1;
         spikes.push(i);
+        this.activeIdx[w++] = i; // post-spike: negative, recovers
+      } else if (this.v[i] > 0.005) {
+        this.activeIdx[w++] = i; // still charged
+      } else {
+        this.v[i] = 0;
+        this.inActive[i] = 0; // fully idle — leaves the active set
       }
     }
+    this.activeCount = w;
     if (this.learning) {
       // STDP pairing (on pre spike): causal if post not recently fired.
       // Eligibility is subsampled on high-degree neurons — at most
@@ -352,7 +399,10 @@ export class LIFBrain {
         const to = this.adjStart[pre + 1];
         for (let k = from; k < to; k++) {
           const post = this.adjPost[k];
-          if (this.refracUntil[post] <= t) this.v[post] += this.adjW[k] * this.wGain;
+          if (this.refracUntil[post] <= t) {
+            this.v[post] += this.adjW[k] * this.wGain;
+            if (this.v[post] > 0.005) this.ensureActive(post);
+          }
         }
       }
     }
@@ -439,6 +489,13 @@ export class LIFBrain {
     let centralSpikes = 0;
     for (let sub = 0; sub < SUBSTEPS_PER_STEP; sub++) {
       const spikes = this.substep();
+      if (spikes.length > CASCADE_CEILING) {
+        const until = this.tSub + CASCADE_REFRACT;
+        for (let k = 0; k < spikes.length; k++) {
+          const i = spikes[k];
+          if (this.refracUntil[i] < until) this.refracUntil[i] = until;
+        }
+      }
       for (const i of spikes) {
         let isMotor = false;
         for (let c = 0; c < this.motorGroups.length; c++) {

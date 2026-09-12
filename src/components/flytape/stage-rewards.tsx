@@ -5,9 +5,11 @@ import { Brain, Bug, Zap, Sparkles, Disc3, AudioLines } from "lucide-react";
 import { flywireSim, janeliaSim } from "@/lib/neural-sim";
 
 /**
- * TIKTOK-STYLE REWARD ANIMATIONS — every audit event floats an icon up
- * from the stage: sensory = Brain, motor burst = Zap, drop = Sparkles,
- * track switch = Disc3. WIRE events red-tinted, JANELIA violet-tinted.
+ * TIKTOK-STYLE REWARD ANIMATIONS — audit events float an icon up from the
+ * stage: sensory = Brain, motor burst = Zap, drop = Sparkles, track switch
+ * = Disc3. WIRE events red-tinted, JANELIA violet-tinted.
+ * Reads only the TAIL of each audit ring buffer (index tracking breaks once
+ * the ring shifts) and every float expires by age — nothing freezes.
  */
 
 type Kind = "brain" | "zap" | "sparkles" | "disc" | "audio";
@@ -18,6 +20,7 @@ interface Float {
   x: number;
   drift: number;
   scale: number;
+  born: number;
 }
 
 const ICONS: Record<Kind, typeof Brain> = {
@@ -28,6 +31,8 @@ const ICONS: Record<Kind, typeof Brain> = {
   audio: AudioLines,
 };
 const COLORS: Record<"wire" | "janelia", string> = { wire: "#ff6b6b", janelia: "#c084fc" };
+const FLOAT_LIFE_MS = 2400;
+const MAX_FLOATS = 16;
 
 function classify(msg: string): Kind {
   if (msg.includes("DROP") || msg.includes("synchrony")) return "sparkles";
@@ -39,7 +44,7 @@ function classify(msg: string): Kind {
 
 export function StageRewards() {
   const [floats, setFloats] = useState<Float[]>([]);
-  const seen = useRef({ wire: 0, janelia: 0 });
+  const lastSeen = useRef({ wire: "", janelia: "" });
   const idRef = useRef(0);
 
   useEffect(() => {
@@ -47,7 +52,7 @@ export function StageRewards() {
       const kind = classify(msg);
       const big = kind === "sparkles" || kind === "disc";
       setFloats((cur) => [
-        ...cur.slice(-14),
+        ...cur.slice(-(MAX_FLOATS - 1)),
         {
           id: idRef.current++,
           fly,
@@ -55,37 +60,31 @@ export function StageRewards() {
           x: 12 + Math.random() * 76,
           drift: (Math.random() - 0.5) * 90,
           scale: big ? 1.7 : 1 + Math.random() * 0.5,
+          born: Date.now(),
         },
       ]);
     };
 
     const id = setInterval(() => {
+      // tail-poll: only each buffer's newest line matters (bars repeat)
       const w = flywireSim.audit;
       const j = janeliaSim.audit;
-      const fresh: (() => void)[] = [];
-      while (seen.current.wire < w.length) {
-        const msg = w[seen.current.wire];
-        fresh.push(() => spawn("wire", msg));
-        seen.current.wire++;
+      const wNew = w.length ? w[w.length - 1] : "";
+      const jNew = j.length ? j[j.length - 1] : "";
+      if (wNew && wNew !== lastSeen.current.wire) {
+        lastSeen.current.wire = wNew;
+        spawn("wire", wNew);
       }
-      while (seen.current.janelia < j.length) {
-        const msg = j[seen.current.janelia];
-        fresh.push(() => spawn("janelia", msg));
-        seen.current.janelia++;
+      if (jNew && jNew !== lastSeen.current.janelia) {
+        lastSeen.current.janelia = jNew;
+        spawn("janelia", jNew);
       }
-      // cap burst: max 4 icons per tick
-      fresh.slice(0, 4).forEach((fn, i) => window.setTimeout(fn, i * 160));
-      if (fresh.length > 400) seen.current = { wire: w.length, janelia: j.length };
+      // age out finished floats so nothing ever freezes on screen
+      const now = Date.now();
+      setFloats((cur) => (cur.some((f) => now - f.born > FLOAT_LIFE_MS) ? cur.filter((f) => now - f.born <= FLOAT_LIFE_MS) : cur));
     }, 280);
     return () => clearInterval(id);
   }, []);
-
-  // garbage-collect finished floats
-  useEffect(() => {
-    if (!floats.length) return;
-    const t = setTimeout(() => setFloats((cur) => cur.slice(floats.length - 12 > 0 ? floats.length - 12 : 0)), 2600);
-    return () => clearTimeout(t);
-  }, [floats]);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">

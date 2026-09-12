@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { NeuralSim } from "@/lib/neural-sim";
 import { TOTAL_SOMATA } from "@/lib/neural-sim";
 import { audioEngine } from "@/lib/audio-engine";
-import { NeuralBrain3D, driveSensory } from "./neural-brain-3d";
+import { NeuralBrain3D } from "./neural-brain-3d";
 
 interface Props {
   sim: NeuralSim;
@@ -17,12 +17,10 @@ interface Props {
 }
 
 /**
- * CNS / NEURAL ACTIVITY — one panel per fly, fully independent:
- * own dataset (real NeuroMorpho reconstructions), own spiking dynamics,
- * own sensory drive. FLYWIRE rides kicks, JANELIA rides snare/hat energy.
- * Colors: dim = idle skeleton, mint = firing (+rate), amber = saturating.
- * Rendering is a dedicated Three.js scene (see neural-brain-3d.tsx); while
- * WebGL is unavailable this panel keeps the sim alive with a bare ticker.
+ * CNS / NEURAL ACTIVITY — one panel per fly. The rendered animation is the
+ * fly's REAL brain activity: the worker samples its trained network and
+ * flashes each neuron that actually spikes (one unified animation).
+ * Rendering is a dedicated Three.js scene (see neural-brain-3d.tsx).
  */
 export function NeuralPanel({ sim, title, accent, drive, fly }: Props) {
   const [mounted, setMounted] = useState(false);
@@ -72,7 +70,9 @@ export function NeuralPanel({ sim, title, accent, drive, fly }: Props) {
   useEffect(() => {
     const iv = setInterval(() => {
       setLoadPct(Math.round(sim.loadProgress * 100));
-      setLevels({ motor: sim.motorLevel(), central: sim.centralLevel() });
+      // worker-computed drive EMAs — the real music-generating brain's rates
+      const d = audioEngine.brains.flyDrive(fly);
+      setLevels({ motor: d.motor, central: d.think });
       // real node utilization of THIS fly's trained brain (last 4 bars)
       setUtil(audioEngine.brains.participation(512)[fly]);
       if (sim.realData) {
@@ -87,24 +87,6 @@ export function NeuralPanel({ sim, title, accent, drive, fly }: Props) {
     return () => clearInterval(iv);
   }, [sim]);
 
-  // Fallback ticker — while the 3D render loop is NOT alive (boot, WebGL
-  // failure, context loss) it owns sim.tick so the brain stays live; the
-  // moment the 3D loop reports alive it goes idle. Exactly one ticker at a time.
-  useEffect(() => {
-    let raf = 0;
-    let last = performance.now();
-    const driveState = { lastDrive: 0, lastPulseAt: 0 };
-    const loop = (ts: number) => {
-      raf = requestAnimationFrame(loop); // stays warm so it can resume after a context loss
-      if (webglRef.current) return;
-      const dt = Math.min(0.05, (ts - last) / 1000);
-      last = ts;
-      sim.tick(dt);
-      driveSensory(sim, drive, driveState, ts);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [sim, drive]);
 
   const loading = loadPct < 100;
   const fetching = loadPct < 50;

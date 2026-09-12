@@ -48,7 +48,7 @@ function TrackNames() {
   }, []);
   if (!names) {
     return (
-      <span className="font-mono text-[10px] text-emerald-300/50">DJ FLYWIRE × MC JANELIA · 96 BPM</span>
+      <span className="font-mono text-[10px] text-emerald-300/50">DJ FLYWIRE × MC JANELIA · 128 BPM</span>
     );
   }
   return (
@@ -156,7 +156,7 @@ export function FlytapeApp() {
       <footer className="shrink-0 px-4 pb-2 pt-1">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-[13px] text-slate-500">
           <span>
-            Fly at the decks <span className="text-slate-700">|</span> 96 BPM live synthesis{" "}
+            Fly at the decks <span className="text-slate-700">|</span> 128 BPM live synthesis{" "}
             <span className="text-slate-700">|</span> Synchronized neural activity
           </span>
           <span className="font-mono text-[11px] text-slate-600">

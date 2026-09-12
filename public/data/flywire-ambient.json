@@ -1,4 +1,10 @@
 {
- "wire": 4000,
- "janelia": 4000
+ "wire": {
+  "ambient": 1900,
+  "wGain": 1.4
+ },
+ "janelia": {
+  "ambient": 1600,
+  "wGain": 1.4
+ }
 }

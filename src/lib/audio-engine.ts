@@ -26,7 +26,7 @@ export interface VisualEvent {
 }
 
 /** playback tempo — single source of truth for every BPM display */
-export const BPM = 96;
+export const BPM = 128;
 /** nearest-onset pitch lookup for a melodic channel (what the brain learned) */
 function corpusPitchAt(corpus: typeof FLYWIRE_CORPUS, step: number, channel: number): number {
   const on = corpus.onsets[channel % corpus.onsets.length];
@@ -69,9 +69,6 @@ export interface BrainNote {
 class BrainModeController {
   loaded = false;
   loading = false;
-  /** voiced-burst bookkeeping happens worker-side; these are the last bar's counts */
-  private lastBarCounts = { wire: 0, janelia: 0 };
-  private pendingSwitch = false;
 
   get ready(): boolean {
     return brainBridge.ready;
@@ -99,9 +96,9 @@ class BrainModeController {
     return brainBridge.flyDrive(fly);
   }
 
-  /** lastFire snapshots from the worker — the 3D renders read utilization */
-  lastFireSnap(fly: "wire" | "janelia"): { lastFire: Float32Array; tSub: number } | null {
-    return brainBridge.fireSnap(fly);
+  /** worker-computed glow + pulse snapshots (10 Hz) — the 3D renders upload these */
+  glowSnap(fly: "wire" | "janelia") {
+    return brainBridge.glowSnap(fly);
   }
 
   /** raw unsmoothed spike output of the most recent 16th, with a step index
@@ -114,10 +111,6 @@ class BrainModeController {
     return brainBridge.spikesNow();
   }
 
-  lastBarSpikeCounts() {
-    return this.lastBarCounts;
-  }
-
   /** fraction of nodes that fired within the last 4 bars — worker-computed */
   participation(_windowSubsteps = 256): { wire: number; janelia: number } {
     return brainBridge.participation();
@@ -127,15 +120,10 @@ class BrainModeController {
     return brainBridge.ready ? brainBridge.trackNames : null;
   }
 
-  /** per-bar synchrony now computed worker-side; main thread only reads */
-  synchrony(): number {
-    this.lastBarCounts = { ...brainBridge.barCounts };
-    return brainBridge.sync;
-  }
-
-  switchTrack(): { wire: string; janelia: string } | null {
-    brainBridge.switchTrack();
-    return brainBridge.ready ? brainBridge.trackNames : null;
+  /** close the bar: worker returns spike counts, synchrony, utilization —
+   *  and performs the record switch when asked */
+  requestBar(wantSwitch = false): Promise<import("./brain-bridge").BarResult> {
+    return brainBridge.requestBar(wantSwitch);
   }
 
   requestStep(cStep: number): Promise<import("./brain-bridge").StepResult> {
@@ -289,44 +277,43 @@ class AudioEngine {
     // ---- visual events ----
     if (s === 0) {
       this.visualEvents.push({ time: t, type: "bar" });
-      // brains decide the drop: synchrony between both motor populations
-      if (bar >= 4 && !this.pendingDrop && this.brains.ready) {
-        // track switching: every 16 bars the DJs change records
-        if (bar % 16 === 0 && s === 0 && bar > 0) {
-          const t = this.brains.switchTrack();
-          if (t) {
-            flywireSim.auditEvent(`TRACK SWITCH → "${t.wire}"`);
-            janeliaSim.auditEvent(`TRACK SWITCH → "${t.janelia}"`);
-          }
-        }
-        // synchrony() snapshots the bar's spike counts before resetting them —
-        // read counts AFTER it so the log line shows the bar it describes
-        const sync = this.brains.synchrony();
-        const counts = this.brains.lastBarSpikeCounts();
-        const util = this.brains.participation(512); // nodes fired in last 4 bars — matches calibration
-        const note =
-          `bar ${bar}: ${counts.wire}+${counts.janelia} motor spikes, ` +
-          `util ${(util.wire * 100).toFixed(0)}%+${(util.janelia * 100).toFixed(0)}%, sync ${sync.toFixed(2)}`;
-        if (sync > 0.55 && bar - this.lastDropBar >= 8) {
-          this.pendingDrop = true;
-          this.lastDropBar = bar;
-          flywireSim.auditEvent(`${note} → DROP`);
-          janeliaSim.auditEvent(`${note} → DROP`);
-        } else {
-          flywireSim.auditEvent(`${note} — no drop`);
-          janeliaSim.auditEvent(`${note} — no drop`);
-        }
-        this.visualEvents.push({ time: t, type: "reward" });
-      } else if (this.brains.ready) {
-        const counts = this.brains.lastBarSpikeCounts();
-        const util = this.brains.participation(512);
-        flywireSim.auditEvent(
-          `bar ${bar}: ${counts.wire} motor spikes, util ${(util.wire * 100).toFixed(0)}% (build/roll)`
-        );
-        janeliaSim.auditEvent(
-          `bar ${bar}: ${counts.janelia} motor spikes, util ${(util.janelia * 100).toFixed(0)}% (build/roll)`
-        );
-        this.visualEvents.push({ time: t, type: "reward" });
+      // brains decide the drop: synchrony between both motor populations.
+      // The bar close (counts/sync/util + record switch) happens in the
+      // worker; the response lands well inside the 150 ms lookahead.
+      if (this.brains.ready) {
+        const wantSwitch = bar > 0 && bar % 16 === 0;
+        this.brains
+          .requestBar(wantSwitch)
+          .then((res) => {
+            if (wantSwitch && res.switchNames) {
+              flywireSim.auditEvent(`TRACK SWITCH → "${res.switchNames.wire}"`);
+              janeliaSim.auditEvent(`TRACK SWITCH → "${res.switchNames.janelia}"`);
+            }
+            const util = { wire: res.utilWire, janelia: res.utilJanelia };
+            if (bar >= 4) {
+              const note =
+                `bar ${bar}: ${res.counts.wire}+${res.counts.janelia} motor spikes, ` +
+                `util ${(util.wire * 100).toFixed(0)}%+${(util.janelia * 100).toFixed(0)}%, sync ${res.sync.toFixed(2)}`;
+              if (res.sync > 0.55 && bar - this.lastDropBar >= 8 && !this.pendingDrop) {
+                this.pendingDrop = true;
+                this.lastDropBar = bar;
+                flywireSim.auditEvent(`${note} → DROP`);
+                janeliaSim.auditEvent(`${note} → DROP`);
+              } else {
+                flywireSim.auditEvent(`${note} — no drop`);
+                janeliaSim.auditEvent(`${note} — no drop`);
+              }
+            } else {
+              flywireSim.auditEvent(
+                `bar ${bar}: ${res.counts.wire} motor spikes, util ${(util.wire * 100).toFixed(0)}% (build/roll)`
+              );
+              janeliaSim.auditEvent(
+                `bar ${bar}: ${res.counts.janelia} motor spikes, util ${(util.janelia * 100).toFixed(0)}% (build/roll)`
+              );
+            }
+            this.visualEvents.push({ time: t, type: "reward" });
+          })
+          .catch(() => {});
       }
     }
     if (this.lastDropBar >= 0 && bar >= this.lastDropBar + 8 && s === 0) {

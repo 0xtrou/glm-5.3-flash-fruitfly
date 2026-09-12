@@ -22,8 +22,9 @@ export const REGION_CX = 1 as Region;
 export const REGION_VNC = 2 as Region;
 
 const REVEAL_SECONDS = 0.8;
-/** bump when regenerating public/data bundles — busts immutable browser cache */
-export const DATA_VERSION = 11;
+/** re-exported single source of truth — see data-version.ts */
+export { DATA_VERSION } from "./data-version";
+import { DATA_VERSION } from "./data-version";
 
 function gauss(): number {
   let u = 0;
@@ -180,12 +181,19 @@ export class NeuralSim {
   }
 
   /**
-   * Adopt the FlyWire FAFB v783 whole-brain graph: every node IS a real
-   * neuron (139,255 of them), adjacency is the real proofread connectome.
-   * Region for coloring comes from real JRC2018 position (lateral = optic
-   * lobe, low = VNC output territory, else central brain).
+   * Adopt the FlyWire FAFB v783 whole-brain graph: every rendered node IS a
+   * real neuron (139,255 of them), adjacency is the real proofread connectome.
+   * Positions come pre-shaped from the worker (each real neuron placed inside
+   * the fly-CNS morphology envelope, region-preserving); `regions` carries the
+   * real classification so coloring stays biological.
    */
-  adoptFlywire(vt: { n: number; positions: Float32Array; adjStart: Uint32Array; edgeSample: Uint32Array }) {
+  adoptFlywire(vt: {
+    n: number;
+    positions: Float32Array;
+    regions?: Uint8Array;
+    adjStart: Uint32Array;
+    edgeSample: Uint32Array;
+  }) {
     const n = vt.n;
     this.x = new Float32Array(n);
     this.y = new Float32Array(n);
@@ -199,10 +207,13 @@ export class NeuralSim {
       this.x[i] = x;
       this.y[i] = y;
       this.z[i] = z;
-      let r: Region;
-      if (Math.abs(x) >= 0.18) r = REGION_OL;
-      else if (y <= -0.2) r = REGION_VNC;
-      else r = REGION_CX;
+      const r = vt.regions
+        ? (vt.regions[i] as Region)
+        : Math.abs(x) >= 0.18
+          ? REGION_OL
+          : y <= -0.2
+            ? REGION_VNC
+            : REGION_CX;
       this.region[i] = r;
       pools[r].push(i);
     }
@@ -240,9 +251,9 @@ export class NeuralSim {
       neurons: n,
       points: n,
       archives: ["FlyWire FAFB v783"],
-      source: "FlyWire FAFB v783 proofread connectome (Dorkenwald et al. 2024)",
+      source: "FlyWire FAFB v783 proofread connectome, drawn inside the real fly-CNS morphology (NeuroMorpho)",
     };
-    this.auditEvent(`dataset loaded — ${n} real neurons (FlyWire FAFB v783)`);
+    this.auditEvent(`dataset loaded — ${n} real neurons, morphology-shaped (FlyWire FAFB v783)`);
   }
 
   /** Fetch this fly's real morphologies and swap the atlas out from under the panel. */
@@ -354,42 +365,10 @@ export class NeuralSim {
     }
   }
 
-  tick(dt: number) {
-    if (this.loadProgress < 0.5 && !this.realData) {
-      // still fetching — keep the procedural one charging to 0.5 max
-      this.loadProgress = Math.min(0.5, this.loadProgress + dt / 3);
-      return;
-    }
-    if (this.loadProgress >= 1) {
-      this.loadProgress = 1;
-    }
-    const decay = Math.exp(-dt * 5.6);
-    const act = this.act;
-    const adj = this.adjacency;
-    const off = this.offsets;
-    let motorFires = 0;
-    let centralFires = 0;
-    for (let i = 0; i < this.count; i++) {
-      const a = act[i];
-      if (a > 0.05) {
-        if (a > 0.6 && adj.length) {
-          const spike = a * 0.055;
-          const from = off[i];
-          const to = off[i + 1];
-          for (let k = from; k < to; k++) {
-            if (Math.random() < 0.4) act[adj[k]] += spike;
-          }
-          // spike event — real reflections feed on these
-          if (this.region[i] === REGION_VNC) motorFires++;
-          else centralFires++;
-        }
-        act[i] = Math.min(1.1, a * decay);
-      }
-    }
-    // EMA of firing rates — what the fly avatars express as movement
-    const k = Math.min(1, dt * 4);
-    this.motorRateEma += (Math.min(1, motorFires / 260) - this.motorRateEma) * k;
-    this.thinkRateEma += (Math.min(1, centralFires / 200) - this.thinkRateEma) * k;
+  tick(_dt: number) {
+    // ACTIVITY IS WORKER-OWNED NOW: the worker samples its trained brains at
+    // 10 Hz and posts glow/pulse buffers (see brain-worker gfxTick). The old
+    // per-frame 139k-node spread loop on the main thread is gone.
   }
 
   revealedCount(): number {
@@ -444,15 +423,20 @@ export const TOTAL_SOMATA = 139255; // FlyWire FAFB v783 proofread neurons — a
 /** Two independent brains — one per fly, each with its own real neurons + dynamics. */
 export const flywireSim = new NeuralSim("/data/fly-neurons-wire.json");
 export const janeliaSim = new NeuralSim("/data/fly-neurons-janelia.json");
+let booted = false;
 export function bootNeuralSims() {
+  if (booted) return; // strict-mode double effects must not adopt twice
+  booted = true;
   void (async () => {
     const { brainBridge } = await import("./brain-bridge");
     brainBridge.start();
     await new Promise<void>((resolve) => brainBridge.whenReady(resolve));
-    const vt = brainBridge.visualTopo;
-    if (!vt) throw new Error("no visual topology");
-    flywireSim.adoptFlywire(vt);
-    janeliaSim.adoptFlywire(vt);
+    (window as unknown as Record<string, unknown>).__nsReady = Date.now();
+    const topoW = brainBridge.visualTopo.wire;
+    const topoJ = brainBridge.visualTopo.janelia;
+    if (!topoW || !topoJ) throw new Error("no visual topology");
+    flywireSim.adoptFlywire(topoW);
+    janeliaSim.adoptFlywire(topoJ);
   })().catch(() => {
     // worker unreachable — panels keep the procedural atlas, honestly labeled
     flywireSim.realData = false;

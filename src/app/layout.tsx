@@ -62,6 +62,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         {children}
         <Analytics />
+        {/* this app registers no service worker — any SW on this origin is a
+            leftover from another app and serves stale chunks forever */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){return r.unregister()})})}" +
+              "if(window.caches&&caches.keys){caches.keys().then(function(ks){ks.forEach(function(k){return caches.delete(k)})})}",
+          }}
+        />
       </body>
     </html>
   );
