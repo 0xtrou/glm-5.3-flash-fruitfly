@@ -36,7 +36,7 @@ export const SUBSTEPS_PER_STEP = 2;
  * neuron in that wave gets an extended refractory pause — the runaway
  * recruitment collapses, ordinary sparse firing is untouched.
  */
-const CASCADE_CEILING = 2000;   // hard recruitment clamp per substep
+const CASCADE_CEILING = 3000;   // hard recruitment clamp per substep
 const CASCADE_FANOUT = 8000;    // regional waves only — a wave may cover ~a lobe, never the whole organ
 const CASCADE_REFRACT = 30;     // ~1.8s fatigue for the wave at 128 BPM
 const CASCADE_SUPPRESS = 1;     // substep of paused propagation blunts runaway

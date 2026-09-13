@@ -90,8 +90,8 @@ void main() {
   //   a >= 0.25  TO     — this neuron just received a real synaptic signal
   //   else       DEFAULT— brain-area color, low brightness
   vec3 col;
-  if (vAct >= 0.75)      col = mix(hue, vec3(1.0), 0.55) * 1.02;
-  else if (vAct >= 0.25) col = hue * 0.75 + 0.24;
+  if (vAct >= 0.75)      col = mix(hue, vec3(1.0), 0.5) * 1.5;
+  else if (vAct >= 0.25) col = hue * 0.85 + 0.30;
   else                   col = hue * 0.55 + 0.14;
   gl_FragColor = vec4(col * disk * 0.62, disk);
 }
@@ -339,7 +339,11 @@ export function NeuralBrain3D({ sim, accent, drive, fly, onWebgl }: Props) {
       const snap = audioEngine.brains.glowSnap(flyRef.current);
       if (!snap || snap.version === appliedGfxVersion) return;
       appliedGfxVersion = snap.version;
-      nodeGeo.setAttribute("aAct", new THREE.BufferAttribute(snap.glow, 1));;
+      // copy into the PERSISTENT attribute — swapping BufferAttribute objects
+      // re-creates the GL buffer and can drop a frame (read as flicker)
+      const actAttr = nodeGeo.getAttribute("aAct") as THREE.BufferAttribute;
+      (actAttr.array as Float32Array).set(snap.glow);
+      actAttr.needsUpdate = true;;
       if (somaMeta.length) {
         const somaAttr = somaGeo.getAttribute("aAct") as THREE.BufferAttribute;
         const sArr = somaAttr.array as Float32Array;

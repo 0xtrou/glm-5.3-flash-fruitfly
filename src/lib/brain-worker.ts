@@ -373,7 +373,9 @@ function gfxTick(fly: Fly, now: number) {
   for (let i = 0; i < glow.length; i++) {
     const sinceFire = clock - lastFire[i];
     const sinceIn = clock - inStamp[i];
-    glow[i] = sinceFire >= 0 && sinceFire < ACTIVE_SUBSTEPS
+    // per-node hold varies (deterministic) so mass color switches never align
+    const hold = ACTIVE_SUBSTEPS + (i % 9);
+    glow[i] = sinceFire >= 0 && sinceFire < hold
       ? 1.0
       : sinceIn >= 0 && sinceIn < FLOW_SUBSTEPS
         ? 0.5
