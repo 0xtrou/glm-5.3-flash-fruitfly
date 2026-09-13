@@ -1,6 +1,6 @@
 {
  "wire": {
-  "ambient": 1900,
+  "ambient": 2500,
   "wGain": 1.4
  },
  "janelia": {

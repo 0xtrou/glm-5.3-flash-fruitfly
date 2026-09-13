@@ -36,8 +36,12 @@ export const SUBSTEPS_PER_STEP = 2;
  * neuron in that wave gets an extended refractory pause — the runaway
  * recruitment collapses, ordinary sparse firing is untouched.
  */
-const CASCADE_CEILING = 1500; // ~1% of the connectome in one substep
-const CASCADE_REFRACT = 45;   // substeps of enforced quiet (~2.6s at 128 BPM)
+const CASCADE_CEILING = 4000;   // a substep recruiting more than this is a wave
+const CASCADE_FANOUT = 8000;    // regional waves only — a wave may cover ~a lobe, never the whole organ
+const CASCADE_REFRACT = 30;     // ~1.8s fatigue for the wave at 128 BPM
+const CASCADE_SUPPRESS = 1;     // substep of paused propagation blunts runaway
+const CASCADE_WAVE_BUDGET = 25000; // a wave may recruit ~18% of the organ, then it must rest
+const CASCADE_WAVE_REST = 45;      // ~2.6s enforced quiet after a spent wave
 
 export interface Weights {
   n: number;
@@ -130,6 +134,8 @@ export class LIFBrain {
   inputGroups: number[][];
   motorGroups: number[][];
   private tSub = 0;
+  private suppressUntil = -1; // synaptic propagation paused during a cascade
+  private waveSpikes = 0;     // cumulative recruitment of the current wave
   private rng: () => number;
   private rngState: number;
   /** delivered-weight multiplier — runtime cascade gain (training uses 1) */
@@ -393,8 +399,14 @@ export class LIFBrain {
         }
       }
     } else {
-      // live playback: delivery only
-      for (const pre of spikes) {
+      // live playback: delivery only — paused while a cascade is collapsing,
+      // and fan-out-capped so a runaway wave cannot compound within a substep
+      const deliver = t < this.suppressUntil
+        ? []
+        : spikes.length > CASCADE_CEILING
+          ? spikes.slice(0, CASCADE_FANOUT)
+          : spikes;
+      for (const pre of deliver) {
         const from = this.adjStart[pre];
         const to = this.adjStart[pre + 1];
         for (let k = from; k < to; k++) {
@@ -489,12 +501,28 @@ export class LIFBrain {
     let centralSpikes = 0;
     for (let sub = 0; sub < SUBSTEPS_PER_STEP; sub++) {
       const spikes = this.substep();
+      // wave accounting runs EVERY substep — a wave crossing just under the
+      // ceiling each substep would otherwise sweep the whole organ unnoticed
+      this.waveSpikes += spikes.length;
       if (spikes.length > CASCADE_CEILING) {
+        // wave detected: fatigue its neurons AND cut propagation so it
+        // cannot recruit the rest of the connectome on the next substeps
         const until = this.tSub + CASCADE_REFRACT;
         for (let k = 0; k < spikes.length; k++) {
           const i = spikes[k];
           if (this.refracUntil[i] < until) this.refracUntil[i] = until;
         }
+        if (this.suppressUntil < this.tSub + CASCADE_SUPPRESS) {
+          this.suppressUntil = this.tSub + CASCADE_SUPPRESS;
+        }
+      }
+      // wave budget: once a wave has recruited its share of the organ it
+      // must rest — a wave stays REGIONAL and can never sweep the whole brain
+      if (this.waveSpikes > CASCADE_WAVE_BUDGET) {
+        this.suppressUntil = this.tSub + CASCADE_WAVE_REST;
+        this.waveSpikes = 0;
+      } else if (spikes.length < 100) {
+        this.waveSpikes = 0; // quiet — the next wave starts fresh
       }
       for (const i of spikes) {
         let isMotor = false;

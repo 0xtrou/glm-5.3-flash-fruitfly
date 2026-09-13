@@ -127,7 +127,7 @@ export function NeuralPanel({ sim, title, accent, drive, fly }: Props) {
           />
         )}
         {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-[#04100b]/80">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-[#04100b]">
             <span className="font-mono text-[11px] font-bold" style={{ color: accent }}>
               {fetching ? "LOADING FLYWIRE FAFB v783" : `LOADING — ${info.neurons || 139255} real neurons`}
             </span>

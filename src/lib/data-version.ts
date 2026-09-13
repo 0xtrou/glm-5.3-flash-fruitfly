@@ -4,4 +4,4 @@
  * Single source of truth — the worker, the sim, and the engine all import
  * THIS file (two divergent copies once shipped stale hum to the worker).
  */
-export const DATA_VERSION = 15;
+export const DATA_VERSION = 16;
