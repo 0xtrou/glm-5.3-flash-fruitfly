@@ -133,6 +133,9 @@ loop, calibration, pass gates, and how to extend the crate.
 
 ## Credits and license
 
+**Author & maintainer: [0xtrou](https://github.com/0xtrou)** — open source:
+[github.com/0xtrou/glm-5.3-flash-fruitfly](https://github.com/0xtrou/glm-5.3-flash-fruitfly).
+
 Neuron reconstructions via [NeuroMorpho.org](https://neuromorpho.org),
 archives of Bock (brain) and Williams (VNC) — all 70 IDs re-verified against
 the NeuroMorpho API. Source volume: Zheng et al., Cell 2018

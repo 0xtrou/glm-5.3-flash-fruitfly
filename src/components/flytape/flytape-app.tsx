@@ -163,6 +163,18 @@ export function FlytapeApp() {
             CONNECTOME | FlyWire FAFB v783 proofread (Dorkenwald et al. 2024, Zenodo 10676866) · 139,255 neurons ·
             15,071,499 measured connections · NeuroMorpho.org reconstructions (Bock, Williams labs)
           </span>
+          <span className="font-mono text-[11px] text-slate-600">
+            OPEN SOURCE |{" "}
+            <a
+              href="https://github.com/0xtrou/glm-5.3-flash-fruitfly"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-500 underline decoration-slate-800 transition hover:text-emerald-400"
+            >
+              github.com/0xtrou/glm-5.3-flash-fruitfly
+            </a>{" "}
+            · © 2026 <span className="text-slate-500">0xtrou</span> — author & maintainer · built with GLM-5.3-Flash + ZCode
+          </span>
         </div>
       </footer>
     </div>
