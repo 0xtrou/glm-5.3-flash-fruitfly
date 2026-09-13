@@ -308,9 +308,8 @@ function trackNames() {
 // ---- graphics state: glow + pulses are computed HERE at 10 Hz so the main
 // thread never loops over 139k nodes — it only uploads the buffers ----
 const GFX_INTERVAL_MS = 100;
-const FLASH_SUBSTEPS = 17; // ~1s total at 128 BPM: 2-substep rise, plateau, 3-substep fall
-const FLASH_ATTACK = 2;
-const FLASH_RELEASE = 3;
+const ACTIVE_SUBSTEPS = 17;  // a spiked node holds its highlight ~1s, then reverts
+const FLOW_SUBSTEPS = 3;     // a node that just RECEIVED a signal shows the flow tint
 const MAX_PULSES = 160;
 interface GfxPulse { on: boolean; a: number; b: number; t: number; speed: number }
 interface GfxState {
@@ -363,21 +362,22 @@ function gfxTick(fly: Fly, now: number) {
   const dt = Math.min(0.25, (now - g.lastPost) / 1000 || GFX_INTERVAL_MS / 1000);
   g.lastPost = now;
 
-  // glow: ONE-TIME flash per real spike — smooth rise, ~1s plateau, smooth
-  // release, then dark. Envelope shaped here so the main thread never can.
+  // NO flashing — discrete node colors only, brightness never changes:
+  //   1.0 = FROM: this neuron spiked (holds highlight ~1s, then reverts)
+  //   0.5 = TO:   this neuron just RECEIVED a real synaptic signal
+  //   0.0 = DEFAULT: brain-area color
   const clock = p.brain.clock;
   const lastFire = p.brain.lastFire;
+  const inStamp = p.brain.inStamp;
   const glow = g.glow;
   for (let i = 0; i < glow.length; i++) {
-    const since = clock - lastFire[i];
-    if (since < 0 || since >= FLASH_SUBSTEPS) {
-      glow[i] = 0;
-      continue;
-    }
-    let v = 1;
-    if (since < FLASH_ATTACK) v = since / FLASH_ATTACK;
-    else if (since >= FLASH_SUBSTEPS - FLASH_RELEASE) v = (FLASH_SUBSTEPS - since) / FLASH_RELEASE;
-    glow[i] = v * 1.3;
+    const sinceFire = clock - lastFire[i];
+    const sinceIn = clock - inStamp[i];
+    glow[i] = sinceFire >= 0 && sinceFire < ACTIVE_SUBSTEPS
+      ? 1.0
+      : sinceIn >= 0 && sinceIn < FLOW_SUBSTEPS
+        ? 0.5
+        : 0.0;
   }
 
   // pulses: advance the travelers, write positions/alphas

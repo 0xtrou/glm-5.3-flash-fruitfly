@@ -11,10 +11,11 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "no-cache" }],
       },
       {
-        // stale worker/page chunks broke localhost testing more than once —
-        // the shell always revalidates too
+        // dev chunk URLs are NOT content-hashed — heuristic caching served
+        // stale worker/core bundles to the browser repeatedly. no-store for
+        // everything in dev; production uses hashed URLs and is unaffected.
         source: "/:path*",
-        headers: [{ key: "Cache-Control", value: "no-cache" }],
+        headers: [{ key: "Cache-Control", value: "no-store" }],
       },
     ];
   },

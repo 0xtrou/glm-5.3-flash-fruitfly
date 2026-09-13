@@ -36,7 +36,7 @@ export const SUBSTEPS_PER_STEP = 2;
  * neuron in that wave gets an extended refractory pause — the runaway
  * recruitment collapses, ordinary sparse firing is untouched.
  */
-const CASCADE_CEILING = 4000;   // a substep recruiting more than this is a wave
+const CASCADE_CEILING = 2000;   // hard recruitment clamp per substep
 const CASCADE_FANOUT = 8000;    // regional waves only — a wave may cover ~a lobe, never the whole organ
 const CASCADE_REFRACT = 30;     // ~1.8s fatigue for the wave at 128 BPM
 const CASCADE_SUPPRESS = 1;     // substep of paused propagation blunts runaway
@@ -147,6 +147,7 @@ export class LIFBrain {
   ambientCount = 900;
   /** absolute substep of last fire per node */
   lastFire = new Float32Array(0);
+  inStamp = new Uint32Array(0); // substep of last real synaptic input received
 
   constructor(graph: GraphData, opts: BrainBuildOptions) {
     this.rng = mulberry32(opts.seed);
@@ -203,6 +204,7 @@ export class LIFBrain {
     this.refracUntil = new Int32Array(n);
     this.recent = new Float32Array(n);
     this.lastFire = new Float32Array(n).fill(-1e9);
+    this.inStamp = new Uint32Array(n).fill(0xffffffff);
     // heterogeneous excitability: thresholds 0.30..0.48 (real neurons vary).
     // Motor-pool nodes get a +0.35 elevation: tonic drive (ambient hum, weak
     // synapses) can never fire them alone — only coordinated, reinforced
@@ -343,6 +345,15 @@ export class LIFBrain {
       const vi = this.v[i];
       this.v[i] = vi - vi * this.leak;
       if (this.v[i] >= this.thresh[i]) {
+        if (spikes.length >= CASCADE_CEILING) {
+          // recruitment clamp: this substep already fired its share. This
+          // neuron is knocked sub-threshold instead of joining the wave —
+          // it stays charged and can fire later. A substep can never
+          // recruit more than CASCADE_CEILING neurons. No whole-organ waves.
+          this.v[i] = this.thresh[i] * 0.4;
+          this.activeIdx[w++] = i;
+          continue;
+        }
         this.v[i] = -0.2;
         this.refracUntil[i] = t + 2;
         this.lastFire[i] = t; // always — participation + visuals read this
@@ -371,7 +382,10 @@ export class LIFBrain {
         const stride = deg > ELIGIBILITY_CAP ? Math.ceil(deg / ELIGIBILITY_CAP) : 1;
         for (let k = from; k < to; k++) {
           const post = this.adjPost[k];
-          if (this.refracUntil[post] <= t) this.v[post] += this.adjW[k] * this.wGain;
+          if (this.refracUntil[post] <= t) {
+            this.v[post] += this.adjW[k] * this.wGain;
+            this.inStamp[post] = t; // real signal arrived: from -> to
+          }
           if ((k - from) % stride === 0 && this.activeECount < ELIGIBILITY_ACTIVE_CAP) {
             this.adjE[k] += 1 - this.postTrace[post];
             this.markActive(k);
@@ -413,6 +427,7 @@ export class LIFBrain {
           const post = this.adjPost[k];
           if (this.refracUntil[post] <= t) {
             this.v[post] += this.adjW[k] * this.wGain;
+            this.inStamp[post] = t; // real signal arrived: from -> to
             if (this.v[post] > 0.005) this.ensureActive(post);
           }
         }
@@ -504,15 +519,16 @@ export class LIFBrain {
       // wave accounting runs EVERY substep — a wave crossing just under the
       // ceiling each substep would otherwise sweep the whole organ unnoticed
       this.waveSpikes += spikes.length;
-      if (spikes.length > CASCADE_CEILING) {
-        // wave detected: fatigue its neurons AND cut propagation so it
-        // cannot recruit the rest of the connectome on the next substeps
+      const inWave = this.waveSpikes > 2000;
+      if (inWave || spikes.length > CASCADE_CEILING) {
+        // fatigue EVERY wave spiker: a neuron fires at most once per wave,
+        // so a wave's size is bounded by its spike budget — no whole-organ sweep
         const until = this.tSub + CASCADE_REFRACT;
         for (let k = 0; k < spikes.length; k++) {
           const i = spikes[k];
           if (this.refracUntil[i] < until) this.refracUntil[i] = until;
         }
-        if (this.suppressUntil < this.tSub + CASCADE_SUPPRESS) {
+        if (spikes.length > CASCADE_CEILING && this.suppressUntil < this.tSub + CASCADE_SUPPRESS) {
           this.suppressUntil = this.tSub + CASCADE_SUPPRESS;
         }
       }

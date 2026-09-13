@@ -85,16 +85,15 @@ void main() {
   float disk = smoothstep(0.5, 0.12, d);
   if (disk < 0.01) discard;
   vec3 hue = hue2rgb(vHue);
-  float a = max(vAct, 0.0);
-  // EXACTLY TWO STATES:
-  // DEFAULT — the node shows its brain-area color at low brightness
-  // ACTIVE  — the brain drove this neuron: same area color, highlighted
-  vec3 base = hue * 0.55 + 0.14;
-  vec3 lit = hue * 0.85 + 0.30;
-  float w = smoothstep(0.05, 0.85, a);
-  vec3 col = mix(base, lit, w);
-  float bright = 0.55 + smoothstep(0.10, 1.2, a) * 0.75;
-  gl_FragColor = vec4(col * disk * bright, disk);
+  // DISCRETE STATES ONLY — color changes, brightness NEVER pulses:
+  //   a >= 0.75  FROM   — this neuron spiked: highlighted area color
+  //   a >= 0.25  TO     — this neuron just received a real synaptic signal
+  //   else       DEFAULT— brain-area color, low brightness
+  vec3 col;
+  if (vAct >= 0.75)      col = mix(hue, vec3(1.0), 0.55) * 1.02;
+  else if (vAct >= 0.25) col = hue * 0.75 + 0.24;
+  else                   col = hue * 0.55 + 0.14;
+  gl_FragColor = vec4(col * disk * 0.62, disk);
 }
 `;
 
