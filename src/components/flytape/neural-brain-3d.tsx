@@ -8,8 +8,10 @@
  * descending below — built from the sim's REAL cable edges + nodes.
  *
  * Scene graph (built once per dataset, keyed on sim.dataVersion + sim.count):
- *   · Points        — every real neuron, custom shader: brain-area colored
- *                     (optic lobe amber / central teal / cord violet)
+ *   · Points        — every real neuron, custom shader. TWO states only:
+ *                     DEFAULT = area color at low brightness (amber/teal/
+ *                     violet brain areas), ACTIVE = highlighted flash of
+ *                     the same area color when the brain drives it.
  * NO connection lines are drawn (user call): wiring stays in the sim.
  * ONE unified activity animation: the worker's per-spike flash.
  *
@@ -64,8 +66,9 @@ void main() {
   vAct = aAct;
   vHue = aHue;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  float fire = aAct <= 0.0 ? 0.0 : smoothstep(0.15, 1.15, aAct);
-  float size = (2.3 + aDeg * 1.1) * (1.0 + fire * 1.8);
+  // two states only: DEFAULT (area color, low brightness) and ACTIVE
+  // (highlighted). Size is static structure — brightness is the signal.
+  float size = 2.3 + aDeg * 1.1;
   gl_PointSize = clamp(size * uDpr * uRefDist / max(1.0, -mv.z), 1.0, 7.0);
   gl_Position = projectionMatrix * mv;
 }
@@ -83,14 +86,14 @@ void main() {
   if (disk < 0.01) discard;
   vec3 hue = hue2rgb(vHue);
   float a = max(vAct, 0.0);
-  // DARK IDLE: nodes are near-invisible until they actually spike.
-  // A spike blooms ONCE in the brain-area color (areas stay distinct),
-  // then decays back to a faint silhouette whisper.
-  vec3 whisper = hue * 0.30 + 0.04;                    // idle silhouette
-  vec3 hot = mix(hue, vec3(1.0), 0.30) * 1.45;         // spike: area color, hot
-  float w = smoothstep(0.05, 0.75, a);
-  vec3 col = mix(whisper, hot, w);
-  float bright = 0.30 + smoothstep(0.10, 1.1, a) * 0.95;
+  // EXACTLY TWO STATES:
+  // DEFAULT — the node shows its brain-area color at low brightness
+  // ACTIVE  — the brain drove this neuron: same area color, highlighted
+  vec3 base = hue * 0.55 + 0.14;
+  vec3 lit = hue * 0.85 + 0.30;
+  float w = smoothstep(0.05, 0.85, a);
+  vec3 col = mix(base, lit, w);
+  float bright = 0.55 + smoothstep(0.10, 1.2, a) * 0.75;
   gl_FragColor = vec4(col * disk * bright, disk);
 }
 `;
